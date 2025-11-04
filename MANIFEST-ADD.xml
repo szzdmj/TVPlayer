@@ -1,0 +1,14 @@
+<!-- application 节点上添加（若已有相同属性请合并） -->
+<application
+    android:usesCleartextTraffic="true"
+    android:networkSecurityConfig="@xml/network_security_config"
+    ...>
+
+    <!-- 注册 WebShellActivity（非 Launcher，可从应用内菜单跳转，或外部 Intent 调起） -->
+    <activity
+        android:name="com.brouken.player.web.WebShellActivity"
+        android:exported="false"
+        android:label="Web Shell"
+        android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout"
+        android:screenOrientation="sensorLandscape" />
+</application>
