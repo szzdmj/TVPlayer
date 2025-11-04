@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>TVPlayer WebShell（Android 5+）</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <style>
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans CJK","PingFang SC","Microsoft YaHei",sans-serif; margin:8px; }
+    h3 { margin:6px 0; }
+    #log { border:1px solid #ccc; padding:8px; height:40vh; overflow:auto; background:#f9f9f9; font:12px/1.4 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; }
+    .row { margin:6px 0; }
+    button { padding:6px 10px; }
+    #cb { border:1px solid #ccc; background:#ffe; padding:8px; margin-top:8px; white-space:pre-wrap; }
+  </style>
+  <script>
+    (function(){
+      var start = Date.now();
+      function ts(){ return "["+(Date.now()-start)+"ms] "; }
+      function out(msg){ var e=document.getElementById('log'); var d=document.createElement('div'); d.textContent=ts()+msg; e.appendChild(d); e.scrollTop=e.scrollHeight; }
+      window.L = { log: out, info: out, warn: out, error: out };
+      window.addEventListener('error', function(e){
+        try{
+          if (e && e.target && e.target.tagName==='SCRIPT') out('Script load failed: '+(e.target.src||'(inline)'));
+          else out('Unhandled error: ' + (e.message||e));
+        }catch(_){}
+      }, true);
+      window.addEventListener('DOMContentLoaded', function(){
+        L.info('UserAgent: '+navigator.userAgent);
+        L.info('Location: '+location.href);
+      });
+    })();
+  </script>
+</head>
+<body>
+  <h3>TVPlayer WebShell</h3>
+  <div id="log" aria-label="日志输出"></div>
+
+  <div class="row">
+    <button onclick="ensureWebjs(function(){ callLoadWeb(); })">加载 webjs.js 并调用 loadWeb()</button>
+  </div>
+
+  <div id="cb" aria-label="回调显示区域">回调输出：暂无</div>
+
+  <script>
+    function setCB(name, v){
+      var e = document.getElementById('cb');
+      try {
+        e.textContent = name + ': ' + (typeof v==='string' ? v : JSON.stringify(v));
+      } catch(_) {
+        e.textContent = name + ': [unserializable]';
+      }
+    }
+    // 供 webjs 调用的回调（如有）
+    function FoundMedia(media){ L.info('FoundMedia called'); setCB('FoundMedia', media); }
+    function FoundSite(site){ window.szsite = site; L.info('FoundSite: '+site); setCB('FoundSite', site); }
+
+    // 简易加载器（相对路径）
+    var __wloading=false, __wloaded=false, __waiters=[];
+    function ensureWebjs(cb){
+      if (__wloaded) { try{cb&&cb();}catch(_){ } return; }
+      __waiters.push(cb);
+      if (__wloading) return; __wloading=true;
+      var s=document.createElement('script'); s.src='webjs.js';
+      s.onload=function(){ __wloaded=true; L.info('webjs.js loaded'); flushWaiters(); };
+      s.onerror=function(){ L.warn('webjs.js load failed (not found).'); flushWaiters(); };
+      document.head.appendChild(s);
+    }
+    function flushWaiters(){ var a=__waiters.slice(); __waiters.length=0; for (var i=0;i<a.length;i++){ try{ a[i]&&a[i](); }catch(_){ } } }
+
+    function callLoadWeb(){
+      if (typeof window.loadWeb!=='function'){ L.warn('window.loadWeb 未定义'); return; }
+      try { L.info('调用 loadWeb()'); window.loadWeb(); } catch(e){ L.error('loadWeb 异常: '+e); }
+    }
+
+    // 页面加载完后自动尝试
+    (function autoTry(){
+      ensureWebjs(function(){
+        if (typeof window.loadWeb==='function') {
+          try { window.loadWeb(); } catch(e){ L.error('auto loadWeb 异常: '+e); }
+        } else {
+          L.warn('auto: loadWeb 未定义');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
