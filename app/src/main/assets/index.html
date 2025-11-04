@@ -2,9 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <title>TVPlayer WebShell（稳定外挂 + 复制播放）</title>
+  <title>TVPlayer WebShell（稳健外挂 + 复制播放）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-
   <style>
     body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans CJK","PingFang SC","Microsoft YaHei",sans-serif; margin:8px; }
     h3 { margin:6px 0; }
@@ -15,7 +14,6 @@
     .hint { color:#666; font-size:12px; }
   </style>
 
-  <!-- 轻量日志器 -->
   <script>
   (function(){
     var start = Date.now();
@@ -26,11 +24,7 @@
       div.textContent = ts() + level + ': ' + msg;
       pre.appendChild(div); pre.scrollTop = pre.scrollHeight;
     }
-    window.L = {
-      info: function(m){ print('INFO', m); },
-      warn: function(m){ print('WARN', m); },
-      error:function(m){ print('ERROR',m); }
-    };
+    window.L = { info: function(m){ print('INFO', m); }, warn: function(m){ print('WARN', m); }, error:function(m){ print('ERROR',m); } };
     window.addEventListener('error', function(e){
       try{
         if (e && e.target && e.target.tagName === 'SCRIPT')
@@ -46,7 +40,7 @@
   })();
   </script>
 
-  <!-- 外挂捕获 define/module/exports（兼容 AMD/CommonJS/UMD），在加载 webjs.js 之前注入 -->
+  <!-- 捕获 define/module/exports（AMD/CommonJS/UMD），在加载 webjs.js 之前注入 -->
   <script>
   (function(){
     if (typeof window.globalThis === 'undefined') {
@@ -75,7 +69,7 @@
   })();
   </script>
 
-  <!-- ES5 兜底“转译+装载”器：把常见 ES6 语法粗略转为 ES5 后 eval（仅在原始方式失败时使用） -->
+  <!-- ES5 兜底“转译+装载”器（原始方式失败时再用） -->
   <script>
   (function(){
     function replaceAll(s, re, rep){ return s.replace(re, rep); }
@@ -126,7 +120,6 @@
     <button onclick="callLoadWeb()">调用 loadWeb()</button>
   </div>
 
-  <!-- 复制/粘贴网址并播放 -->
   <div class="row" aria-label="复制网址播放">
     <input id="urlInput" type="text" placeholder="粘贴要播放的链接（http/https/rtsp/rtmp/file/content 等）" />
     <button onclick="pasteFromClipboard()">从剪贴板粘贴</button>
@@ -138,7 +131,7 @@
   </div>
 
   <script>
-    // ====== 稳健外挂加载 webjs.js ======
+    // 解析 loadWeb（AMD/CommonJS/UMD/default）
     function resolveLoadWebFromExports(){
       try {
         if (typeof window.loadWeb === 'function') return true;
@@ -231,7 +224,7 @@
       });
     }
 
-    // ====== 复制/粘贴/播放 ======
+    // 复制/粘贴/播放
     function normalizeUrl(u){
       if (!u) return '';
       u = (''+u).trim();
@@ -258,31 +251,25 @@
         var t2 = prompt('读取剪贴板失败，请手动粘贴链接:'); if (t2) input.value = t2;
       }
     }
-
     function playFromInput(){ var u = document.getElementById('urlInput').value; playUrl(u); }
-
     async function playFromClipboard(){
       let u = '';
       try { if (navigator.clipboard && navigator.clipboard.readText) u = await navigator.clipboard.readText(); } catch(e){ L.warn('读取剪贴板失败：' + e); }
       if (!u) u = document.getElementById('urlInput').value;
       playUrl(u);
     }
-
     function playUrl(u){
       u = normalizeUrl(u);
       if (!u) { L.warn('未提供链接'); return; }
       if (!isLikelyPlayable(u)) L.warn('链接可能不可播放：' + u);
       L.info('准备播放：' + u);
 
-      // 1) 优先 Android 接口
       try { if (window.Android && typeof Android.playUrl === 'function') { Android.playUrl(u); L.info('已调用 Android.playUrl'); return; } }
       catch(e){ L.warn('调用 Android.playUrl 失败：' + e); }
 
-      // 2) webjs 提供的接口
       try { if (typeof window.playUrl === 'function') { window.playUrl(u); L.info('已调用 webjs.playUrl'); return; } }
       catch(e){ L.warn('调用 webjs.playUrl 失败：' + e); }
 
-      // 3) 兜底：跳转
       try { location.href = u; L.info('已跳转到该链接（兜底策略）'); }
       catch(e){ L.error('跳转失败：' + e); }
     }
@@ -295,7 +282,7 @@
       });
     })();
 
-    // 自启动：日志 + 预加载尝试
+    // 自启动：预加载并尝试调用 loadWeb（若存在）
     (function(){
       tryLoadWebjs();
       ensureWebjsLoaded(function(){
@@ -306,10 +293,6 @@
         }
       });
     })();
-
-    // 可选回调（若 webjs 调用）
-    function FoundMedia(media){ L.info('FoundMedia 被调用'); }
-    function FoundSite(site){ window.szsite = site; L.info('FoundSite：' + site); }
   </script>
 </body>
 </html>
