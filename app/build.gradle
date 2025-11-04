@@ -24,6 +24,16 @@ android {
         }
     }
     buildTypes {
+    debug {
+      minifyEnabled true
+      shrinkResources true
+      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+    }
+  }
+  defaultConfig {
+    // 只打包常用语言，避免依赖库的多语言资源膨胀
+    resConfigs 'en', 'zh'
+  }
         release {
             minifyEnabled false
             //proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
