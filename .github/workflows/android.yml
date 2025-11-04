@@ -57,26 +57,40 @@ jobs:
           echo "Using local index.html (first lines):"
           sed -n '1,20p' app/src/main/assets/index.html || true
 
+          # 可选拉取（失败不致命）
           for f in webjs.js sw.js; do
             url="${BASE_URL%/}/${f}"
             dest="app/src/main/assets/${f}"
             echo "Fetching ${url} -> ${dest}"
-            if ! curl -fsSL -o "${dest}" "${url}"; then
-              echo "WARN: ${f} not fetched (optional)."
-            fi
+            curl -fsSL -o "${dest}" "${url}" || echo "WARN: ${f} not fetched (optional)."
           done
 
           echo "Assets present:"
           ls -l app/src/main/assets
 
-      - name: Build with Gradle (Debug)
+      - name: Build Debug variants
         env:
           JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF8"
-        run: ./gradlew assembleDebug --stacktrace --info --no-daemon
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 构建常见 Debug 变体；若某个任务不存在不会阻塞其它任务（--continue）
+          ./gradlew \
+            :app:assembleLatestUniversalDebug \
+            :app:assembleLegacyUniversalDebug \
+            :app:assembleDebug \
+            --continue --stacktrace --info --no-daemon
 
-      - name: Upload debug APK
+      - name: List build outputs (for diagnostics)
+        run: |
+          echo "==== outputs tree ===="
+          find app/build/outputs -maxdepth 4 -type f | sort
+
+      - name: Upload debug APKs
         uses: actions/upload-artifact@v4
         with:
           name: tvplayer-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/**/debug/*.apk
+            app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
