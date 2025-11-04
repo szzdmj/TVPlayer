@@ -11,14 +11,20 @@ on:
         description: 'Base URL to fetch webjs.js and sw.js (optional)'
         required: false
         default: 'https://szzdmj.github.io/'
-      abi:
-        description: 'Target ABI to include (arm64-v8a or armeabi-v7a)'
-        required: false
-        default: 'arm64-v7a'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: latest-arm64
+            gradle_task: ":app:assembleLatestUniversalDebug"
+            abi: "arm64-v8a"
+          - name: legacy-v7a
+            gradle_task: ":app:assembleLegacyUniversalDebug"
+            abi: "armeabi-v7a"
 
     steps:
       - name: Checkout
@@ -58,10 +64,7 @@ jobs:
             exit 1
           fi
           sed -i '1s/^\xEF\xBB\xBF//' app/src/main/assets/index.html || true
-          echo "Using local index.html (first lines):"
-          sed -n '1,20p' app/src/main/assets/index.html || true
 
-          # 可选拉取（失败不致命）
           for f in webjs.js sw.js; do
             url="${BASE_URL%/}/${f}"
             dest="app/src/main/assets/${f}"
@@ -72,16 +75,14 @@ jobs:
           echo "Assets present:"
           ls -l app/src/main/assets
 
-      - name: Build a single ABI Debug variant
+      - name: Build ${{ matrix.name }}
         env:
           JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF8"
-          ABI: ${{ github.event.inputs.abi || 'arm64-v8a' }}
         shell: bash
         run: |
           set -euo pipefail
-          # 仅构建 latestUniversalDebug，且只包含单一 ABI（通过 -PabiFilter）
-          ./gradlew :app:assembleLatestUniversalDebug \
-            -PabiFilter="$ABI" \
+          ./gradlew ${{ matrix.gradle_task }} \
+            -PabiFilter="${{ matrix.abi }}" \
             --stacktrace --info --no-daemon
 
       - name: List build outputs (for diagnostics)
@@ -89,10 +90,10 @@ jobs:
           echo "==== outputs tree ===="
           find app/build/outputs -maxdepth 4 -type f | sort
 
-      - name: Upload debug APK
+      - name: Upload debug APK (${{ matrix.name }})
         uses: actions/upload-artifact@v4
         with:
-          name: tvplayer-debug-${{ github.event.inputs.abi || 'arm64-v8a' }}
+          name: tvplayer-debug-${{ matrix.name }}
           path: |
             app/build/outputs/apk/**/debug/*.apk
             app/build/outputs/apk/debug/*.apk
