@@ -34,6 +34,7 @@
       }catch(_){}
     }, true);
     window.addEventListener('DOMContentLoaded', function(){
+      L.info('页面已加载（手动模式，未自动调用 loadWeb）');
       L.info('UserAgent: '+navigator.userAgent);
       L.info('Location: '+location.href);
     });
@@ -274,16 +275,10 @@
       catch(e){ L.error('跳转失败：' + e); }
     }
 
-    // 回车提交
-    (function(){
-      window.addEventListener('DOMContentLoaded', function(){
-        var input = document.getElementById('urlInput');
-        input && input.addEventListener('keydown', function(ev){ if (ev.key === 'Enter') { ev.preventDefault(); playFromInput(); } });
-      });
-    })();
-
-    // 自启动：预加载并尝试调用 loadWeb（若存在）
-    (function(){
+    // 不再“自启动”调用 loadWeb，改为完全手动
+    // 如需恢复自动：把下行 AUTO_RUN 设为 true
+    var AUTO_RUN = false;
+    if (AUTO_RUN) {
       tryLoadWebjs();
       ensureWebjsLoaded(function(){
         if (typeof window.loadWeb === 'function') {
@@ -292,7 +287,7 @@
           L.warn('自动调用：loadWeb 未定义（已尝试外挂与兼容转译）。');
         }
       });
-    })();
+    }
   </script>
 </body>
 </html>
