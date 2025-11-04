@@ -11,6 +11,10 @@ on:
         description: 'Base URL to fetch webjs.js and sw.js (optional)'
         required: false
         default: 'https://szzdmj.github.io/'
+      abi:
+        description: 'Target ABI to include (arm64-v8a or armeabi-v7a)'
+        required: false
+        default: 'arm64-v7a'
 
 jobs:
   build:
@@ -68,28 +72,27 @@ jobs:
           echo "Assets present:"
           ls -l app/src/main/assets
 
-      - name: Build Debug variants
+      - name: Build a single ABI Debug variant
         env:
           JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF8"
+          ABI: ${{ github.event.inputs.abi || 'arm64-v8a' }}
         shell: bash
         run: |
           set -euo pipefail
-          # 构建常见 Debug 变体；若某个任务不存在不会阻塞其它任务（--continue）
-          ./gradlew \
-            :app:assembleLatestUniversalDebug \
-            :app:assembleLegacyUniversalDebug \
-            :app:assembleDebug \
-            --continue --stacktrace --info --no-daemon
+          # 仅构建 latestUniversalDebug，且只包含单一 ABI（通过 -PabiFilter）
+          ./gradlew :app:assembleLatestUniversalDebug \
+            -PabiFilter="$ABI" \
+            --stacktrace --info --no-daemon
 
       - name: List build outputs (for diagnostics)
         run: |
           echo "==== outputs tree ===="
           find app/build/outputs -maxdepth 4 -type f | sort
 
-      - name: Upload debug APKs
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: tvplayer-debug
+          name: tvplayer-debug-${{ github.event.inputs.abi || 'arm64-v8a' }}
           path: |
             app/build/outputs/apk/**/debug/*.apk
             app/build/outputs/apk/debug/*.apk
