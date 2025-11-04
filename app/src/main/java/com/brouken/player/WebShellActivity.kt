@@ -32,7 +32,7 @@ class WebShellActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 设备未安装或禁用 WebView 时，安全退出，避免崩溃
+        // 检测设备是否存在 WebView 提供方（避免直接崩溃）
         if (Build.VERSION.SDK_INT >= 24) {
             val pkg = try { WebView.getCurrentWebViewPackage() } catch (_: Throwable) { null }
             if (pkg == null) {
@@ -42,6 +42,7 @@ class WebShellActivity : AppCompatActivity() {
             }
         }
 
+        // 尝试构造 WebView（个别机型构造阶段会抛异常）
         val wv = try { WebView(this) } catch (t: Throwable) {
             Toast.makeText(this, "WebView 初始化失败：${t.javaClass.simpleName}", Toast.LENGTH_LONG).show()
             finish()
@@ -63,7 +64,7 @@ class WebShellActivity : AppCompatActivity() {
         wv.webChromeClient = WebChromeClient()
         wv.addJavascriptInterface(JSBridge(this), "Android")
 
-        // 加载本地 assets 下的 index.html（合入 tvweb 的稳健外挂、再加复制播放）
+        // 加载本地 assets/index.html
         wv.loadUrl("file:///android_asset/index.html")
     }
 
