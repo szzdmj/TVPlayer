@@ -1,42 +1,108 @@
-name: Android Build APK
+name: Android Build APK (Release, tagged)
 
 on:
   push:
     tags:
       - 'v0.*'
+      - 'v[0-9]+.*'
+
+permissions:
+  contents: write  # 供 softprops/action-gh-release 使用
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
           cache: gradle
 
-      - run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > ${GITHUB_WORKSPACE}/keystore.jks
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
-      - run: ./gradlew assembleRelease bundleRelease
-          -Pandroid.injected.signing.store.file=${GITHUB_WORKSPACE}/keystore.jks
-          -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }}
-          -Pandroid.injected.signing.key.alias=key
-          -Pandroid.injected.signing.key.password=${{ secrets.KEYSTORE_PASSWORD }}
+      - name: Prepare assets — ensure index.html; optionally fetch webjs.js and sw.js
+        env:
+          # 如需覆盖，请在 workflow_dispatch 时或改用仓库变量/环境变量
+          BASE_URL: 'https://szzdmj.github.io/'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/assets
+          if [ ! -f app/src/main/assets/index.html ]; then
+            echo "ERROR: app/src/main/assets/index.html not found in repo. Please add it and rerun."
+            exit 1
+          fi
+          # 去除 BOM（若存在）
+          sed -i '1s/^\xEF\xBB\xBF//' app/src/main/assets/index.html || true
+          echo "Using local index.html (first lines):"
+          sed -n '1,20p' app/src/main/assets/index.html || true
 
-      - uses: softprops/action-gh-release@v2
+          # 可选：拉取 webjs.js 与 sw.js（若远端不可用不会失败，仅给出 warning）
+          for f in webjs.js sw.js; do
+            url="${BASE_URL%/}/${f}"
+            dest="app/src/main/assets/${f}"
+            echo "Fetching ${url} -> ${dest}"
+            if ! curl -fsSL -o "${dest}" "${url}"; then
+              echo "WARN: ${f} not fetched (optional)."
+            fi
+          done
+
+          echo "Assets present:"
+          ls -l app/src/main/assets
+
+      - name: Decode keystore from secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "ERROR: secrets.KEYSTORE_BASE64 is empty"; exit 1;
+          fi
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "${GITHUB_WORKSPACE}/keystore.jks"
+          ls -l "${GITHUB_WORKSPACE}/keystore.jks"
+
+      - name: Build signed Release (APK + AAB)
+        env:
+          JAVA_TOOL_OPTIONS: "-Dfile.encoding=UTF8"
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew \
+            assembleRelease \
+            bundleRelease \
+            -Pandroid.injected.signing.store.file="${GITHUB_WORKSPACE}/keystore.jks" \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="key" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            --stacktrace --info --no-daemon
+
+      - name: Upload release artifacts (raw)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvplayer-release-raw
+          path: |
+            app/build/outputs/apk/*/release/*.apk
+            app/build/outputs/bundle/*/*.aab
+          if-no-files-found: warn
+
+      - name: Create GitHub Release (draft, prerelease)
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             app/build/outputs/apk/latestUniversal/release/*.apk
             app/build/outputs/apk/legacyUniversal/release/*.apk
           prerelease: true
           draft: true
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release
-          path: |
-            app/build/outputs/apk/*/release/*.apk
-            app/build/outputs/bundle/*/*.aab
