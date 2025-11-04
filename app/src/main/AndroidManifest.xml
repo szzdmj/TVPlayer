@@ -1,127 +1,79 @@
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+package com.brouken.player
 
-    <uses-feature
-        android:name="android.software.leanback"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.touchscreen"
-        android:required="false" />
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 
-    <uses-permission
-        android:name="android.permission.WRITE_SETTINGS"
-        tools:ignore="ProtectedPermissions" />
-    <uses-permission android:name="android.permission.INTERNET" />
+class WebShellActivity : AppCompatActivity() {
 
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.OPEN_DOCUMENT" />
-            <data android:mimeType="*/*" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.OPEN_DOCUMENT_TREE" />
-        </intent>
-        <intent>
-            <action android:name="android.settings.PICTURE_IN_PICTURE_SETTINGS" />
-        </intent>
-    </queries>
+    private var webView: WebView? = null
 
-    <application
-        android:allowBackup="false"
-        android:appCategory="video"
-        android:banner="@mipmap/banner"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:largeHeap="true"
-        android:networkSecurityConfig="@xml/network_security_config"
-        android:requestLegacyExternalStorage="true"
-        android:enableOnBackInvokedCallback="true"
-        android:localeConfig="@xml/locales_config"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.Player"
-        tools:replace="android:allowBackup"
-        tools:targetApi="n">
+    private class JSBridge(private val activity: AppCompatActivity) {
+        @JavascriptInterface
+        fun playUrl(url: String?) {
+            val u = url?.trim().orEmpty()
+            if (u.isEmpty()) return
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(u))
+                activity.startActivity(intent)
+            } catch (_: Throwable) { }
+        }
+    }
 
-        <!-- 恢复旧版启动入口：PlayerActivity -->
-        <activity
-            android:name=".PlayerActivity"
-            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|touchscreen"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:supportsPictureInPicture="true"
-            tools:targetApi="n">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
-            <!-- 分享文本到播放器 -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
+        // 1) 先判断 WebView 提供方（API 24+）
+        if (Build.VERSION.SDK_INT >= 24) {
+            val pkg = try { WebView.getCurrentWebViewPackage() } catch (_: Throwable) { null }
+            if (pkg == null) {
+                Toast.makeText(this, "此设备未安装或禁用了 WebView，无法打开网页壳", Toast.LENGTH_LONG).show()
+                finish()
+                return
+            }
+        }
 
-            <!-- 常见协议/来源与媒体类型（精简版；你也可以保持 6a7c139 的大列表） -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="rtsp" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-                <data android:scheme="file" />
-                <data android:scheme="content" />
-                <data android:mimeType="video/*" />
-                <!-- 字幕类型 -->
-                <data android:mimeType="application/x-subrip" />
-                <data android:mimeType="text/plain" />
-                <data android:mimeType="text/x-ssa" />
-                <data android:mimeType="application/octet-stream" />
-                <data android:mimeType="application/ass" />
-                <data android:mimeType="application/ssa" />
-                <data android:mimeType="text/vtt" />
-                <data android:mimeType="application/vtt" />
-                <data android:mimeType="application/ttml+xml" />
-            </intent-filter>
+        // 2) 再尝试构造 WebView（部分设备会在构造时报错）
+        val wv = try { WebView(this) } catch (t: Throwable) {
+            Toast.makeText(this, "WebView 初始化失败：${t.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        webView = wv
+        setContentView(wv)
 
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
-        </activity>
+        WebView.setWebContentsDebuggingEnabled(true)
 
-        <!-- WebView 容器：不作为 Launcher，由应用内或其它入口显式打开 -->
-        <activity
-            android:name=".WebShellActivity"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:theme="@style/Theme.Player"
-            tools:targetApi="n" />
+        val s: WebSettings = wv.settings
+        s.javaScriptEnabled = true
+        s.domStorageEnabled = true
+        s.allowFileAccess = true
+        s.allowContentAccess = true
+        s.mediaPlaybackRequiresUserGesture = false
+        s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
 
-        <activity
-            android:name=".MediaStoreChooserActivity"
-            android:configChanges="orientation"
-            android:theme="@style/Transparent" />
+        wv.webChromeClient = WebChromeClient()
+        wv.addJavascriptInterface(JSBridge(this), "Android")
 
-        <activity
-            android:name=".SettingsActivity"
-            android:exported="true"
-            android:label="@string/pref_title"
-            android:parentActivityName=".PlayerActivity"
-            android:screenOrientation="locked"
-            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" >
-            <intent-filter>
-                <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
+        // 直接加载本地 assets 下的 index.html
+        wv.loadUrl("file:///android_asset/index.html")
+    }
 
-    </application>
-</manifest>
+    override fun onDestroy() {
+        super.onDestroy()
+        webView?.let { w ->
+            (w.parent as? android.view.ViewGroup)?.removeView(w)
+            w.destroy()
+        }
+        webView = null
+    }
+}
