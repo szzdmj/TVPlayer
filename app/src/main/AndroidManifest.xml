@@ -43,7 +43,7 @@
         tools:replace="android:allowBackup"
         tools:targetApi="n">
 
-        <!-- 启动入口：保持与 6a7c139 一致，避免无 WebView 设备启动崩溃 -->
+        <!-- 启动入口：保持 PlayerActivity，不影响现有行为 -->
         <activity
             android:name=".PlayerActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|touchscreen"
@@ -97,13 +97,33 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
-        <!-- WebView 壳：仅在显式打开时使用，避免无 WebView 设备崩溃 -->
+        <!-- WebView 壳：显式打开时使用 -->
         <activity
             android:name=".WebShellActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.Player"
-            tools:targetApi="n" />
+            tools:targetApi="n">
+            <!-- 可选：便于 adb 通过 Action 拉起 -->
+            <intent-filter>
+                <action android:name="com.brouken.player.WEB_SHELL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Debug 专用的桌面入口别名（受资源开关控制）。Release 默认为关。 -->
+        <activity-alias
+            android:name=".WebShellLauncher"
+            android:exported="true"
+            android:enabled="@bool/enable_webshell_launcher"
+            android:label="WebShell"
+            android:targetActivity=".WebShellActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <activity
             android:name=".MediaStoreChooserActivity"
