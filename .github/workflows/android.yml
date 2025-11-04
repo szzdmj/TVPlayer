@@ -67,16 +67,15 @@ jobs:
               echo "Fetched index.html from $url"
             else
               echo "WARN: index.html not found locally or remotely; creating minimal placeholder"
-              cat > app/src/main/assets/index.html <<'EOF'
-              <!doctype html>
-              <meta charset="utf-8">
-              <title>TVPlayer</title>
-              <body>TVPlayer placeholder</body>
-              EOF
+              printf '%s\n' '<!doctype html>' \
+                '<meta charset="utf-8">' \
+                '<title>TVPlayer</title>' \
+                '<body>TVPlayer placeholder</body>' \
+                > app/src/main/assets/index.html
             fi
           fi
 
-          # Optional fetches (non-fatal)
+          # 可选拉取（失败不致命）
           for f in webjs.js sw.js; do
             url="${BASE_URL%/}/${f}"
             dest="app/src/main/assets/${f}"
@@ -84,7 +83,7 @@ jobs:
             curl -fsSL -o "${dest}" "${url}" || echo "WARN: ${f} not fetched (optional)."
           done
 
-          # Normalize potential BOM
+          # 去除可能的 BOM
           sed -i '1s/^\xEF\xBB\xBF//' app/src/main/assets/index.html || true
 
           echo "Assets present:"
