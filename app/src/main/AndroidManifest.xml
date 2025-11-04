@@ -43,21 +43,7 @@
         tools:replace="android:allowBackup"
         tools:targetApi="n">
 
-        <!-- 新增：作为启动入口的 WebView 容器，加载 assets/index.html -->
-        <activity
-            android:name=".WebShellActivity"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:theme="@style/Theme.Player"
-            tools:targetApi="n">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <!-- 原播放器：去掉 MAIN/LAUNCHER，保留外部调用（VIEW/SEND 等） -->
+        <!-- 恢复旧版启动入口：PlayerActivity -->
         <activity
             android:name=".PlayerActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|touchscreen"
@@ -65,35 +51,35 @@
             android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
             tools:targetApi="n">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
 
-            <!-- 分享文本链接 -->
+            <!-- 分享文本到播放器 -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
 
-            <!-- 直接处理 rtsp -->
+            <!-- 常见协议/来源与媒体类型（精简版；你也可以保持 6a7c139 的大列表） -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="rtsp" />
             </intent-filter>
-
-            <!-- 常见视频来源（http/https/file/content），泛化到 video/*；附字幕类型 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
                 <data android:scheme="http" />
                 <data android:scheme="https" />
                 <data android:scheme="file" />
                 <data android:scheme="content" />
-
                 <data android:mimeType="video/*" />
-
                 <!-- 字幕类型 -->
                 <data android:mimeType="application/x-subrip" />
                 <data android:mimeType="text/plain" />
@@ -110,6 +96,14 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
+
+        <!-- WebView 容器：不作为 Launcher，由应用内或其它入口显式打开 -->
+        <activity
+            android:name=".WebShellActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Player"
+            tools:targetApi="n" />
 
         <activity
             android:name=".MediaStoreChooserActivity"
@@ -130,5 +124,4 @@
         </activity>
 
     </application>
-
 </manifest>
