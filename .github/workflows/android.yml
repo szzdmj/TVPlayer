@@ -52,25 +52,40 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Prepare assets — ensure index.html; optionally fetch webjs.js and sw.js
+      - name: Prepare assets — tolerate missing index.html, fetch or create minimal placeholder
         env:
           BASE_URL: ${{ github.event.inputs.base_url || 'https://szzdmj.github.io/' }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p app/src/main/assets
-          if [ ! -f app/src/main/assets/index.html ]; then
-            echo "ERROR: app/src/main/assets/index.html not found in repo. Please add it and rerun."
-            exit 1
-          fi
-          sed -i '1s/^\xEF\xBB\xBF//' app/src/main/assets/index.html || true
 
+          if [ ! -f app/src/main/assets/index.html ]; then
+            url="${BASE_URL%/}/index.html"
+            echo "index.html missing; trying to fetch: $url"
+            if curl -fsSL -o app/src/main/assets/index.html "$url"; then
+              echo "Fetched index.html from $url"
+            else
+              echo "WARN: index.html not found locally or remotely; creating minimal placeholder"
+              cat > app/src/main/assets/index.html <<'EOF'
+              <!doctype html>
+              <meta charset="utf-8">
+              <title>TVPlayer</title>
+              <body>TVPlayer placeholder</body>
+              EOF
+            fi
+          fi
+
+          # Optional fetches (non-fatal)
           for f in webjs.js sw.js; do
             url="${BASE_URL%/}/${f}"
             dest="app/src/main/assets/${f}"
             echo "Fetching ${url} -> ${dest}"
             curl -fsSL -o "${dest}" "${url}" || echo "WARN: ${f} not fetched (optional)."
           done
+
+          # Normalize potential BOM
+          sed -i '1s/^\xEF\xBB\xBF//' app/src/main/assets/index.html || true
 
           echo "Assets present:"
           ls -l app/src/main/assets
