@@ -17,9 +17,10 @@ class WebShellActivity : AppCompatActivity() {
     private class JSBridge(private val activity: AppCompatActivity) {
         @JavascriptInterface
         fun playUrl(url: String?) {
-            if (url.isNullOrBlank()) return
+            val u = url?.trim().orEmpty()
+            if (u.isEmpty()) return
             try {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url.trim()))
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(u))
                 activity.startActivity(intent)
             } catch (_: Throwable) {
             }
