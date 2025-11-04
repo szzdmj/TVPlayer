@@ -7,7 +7,7 @@ on:
       - 'v[0-9]+.*'
 
 permissions:
-  contents: write  # 供 softprops/action-gh-release 使用
+  contents: write
 
 jobs:
   build:
@@ -36,7 +36,6 @@ jobs:
 
       - name: Prepare assets — ensure index.html; optionally fetch webjs.js and sw.js
         env:
-          # 如需覆盖，请在 workflow_dispatch 时或改用仓库变量/环境变量
           BASE_URL: 'https://szzdmj.github.io/'
         shell: bash
         run: |
@@ -46,31 +45,19 @@ jobs:
             echo "ERROR: app/src/main/assets/index.html not found in repo. Please add it and rerun."
             exit 1
           fi
-          # 去除 BOM（若存在）
           sed -i '1s/^\xEF\xBB\xBF//' app/src/main/assets/index.html || true
-          echo "Using local index.html (first lines):"
-          sed -n '1,20p' app/src/main/assets/index.html || true
 
-          # 可选：拉取 webjs.js 与 sw.js（若远端不可用不会失败，仅给出 warning）
           for f in webjs.js sw.js; do
             url="${BASE_URL%/}/${f}"
             dest="app/src/main/assets/${f}"
             echo "Fetching ${url} -> ${dest}"
-            if ! curl -fsSL -o "${dest}" "${url}"; then
-              echo "WARN: ${f} not fetched (optional)."
-            fi
+            curl -fsSL -o "${dest}" "${url}" || echo "WARN: ${f} not fetched (optional)."
           done
-
-          echo "Assets present:"
-          ls -l app/src/main/assets
 
       - name: Decode keystore from secrets
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "ERROR: secrets.KEYSTORE_BASE64 is empty"; exit 1;
-          fi
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "${GITHUB_WORKSPACE}/keystore.jks"
           ls -l "${GITHUB_WORKSPACE}/keystore.jks"
 
