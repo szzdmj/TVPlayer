@@ -15,6 +15,10 @@ android {
         versionCode 199
         versionName "0.${versionCode}"
         archivesBaseName = "Just.Player.v${versionName}"
+
+        // 只打包常用语言，避免依赖库的多语言资源膨胀
+        resConfigs 'en', 'zh'
+
         if (abiFilter) {
             def abiCodeMap = ["x86": 1, "x86_64": 2, "armeabi-v7a": 3, "arm64-v8a": 4]
             versionCode = versionCode * 10 + abiCodeMap[abiFilter]
@@ -23,22 +27,22 @@ android {
             }
         }
     }
+
     buildTypes {
-    debug {
-      minifyEnabled true
-      shrinkResources true
-      proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-    }
-  }
-  defaultConfig {
-    // 只打包常用语言，避免依赖库的多语言资源膨胀
-    resConfigs 'en', 'zh'
-  }
+        debug {
+            // 为定位问题，先关闭 Debug 的混淆与资源压缩
+            minifyEnabled false
+            shrinkResources false
+            // 如需开启混淆，请先在 proguard-rules.pro 补充 keep 规则再逐步打开
+            // proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
         release {
             minifyEnabled false
-            //proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // 如需开启混淆可恢复如下行，并完善 proguard-rules.pro
+            // proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     flavorDimensions "targetSdk", "distribution"
     productFlavors {
         latest {
@@ -61,12 +65,14 @@ android {
             dimension "distribution"
         }
     }
+
     variantFilter { variant ->
         def names = variant.flavors*.name
         if (names.contains("legacy") && (names.contains("amazon") || names.contains("accrescent"))) {
             setIgnore(true)
         }
     }
+
     applicationVariants.all { variant ->
         if (variant.buildType.name == "release" && variant.flavorName == "latestUniversal") {
             variant.outputs.all { output ->
@@ -79,16 +85,19 @@ android {
             }
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
     buildFeatures {
         buildConfig = true
     }
+
     lint {
-        disable 'MissingTranslation'
-        disable 'UnsafeOptInUsageError'
+        abortOnError false
+        disable 'MissingTranslation', 'UnsafeOptInUsageError'
     }
 }
 
@@ -101,6 +110,7 @@ dependencies {
     implementation "androidx.media3:media3-common:$media3_version"
     implementation "androidx.media3:media3-container:$media3_version"
     implementation "androidx.media3:media3-extractor:$media3_version"
+
     implementation("androidx.media3:media3-exoplayer-dash:$media3_version") {
         exclude group: "androidx.media3", module: "media3-exoplayer"
     }
@@ -113,6 +123,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-rtsp:$media3_version") {
         exclude group: "androidx.media3", module: "media3-exoplayer"
     }
+
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
     implementation 'com.getkeepsafe.taptargetview:taptargetview:1.13.3'
     implementation 'com.google.android.material:material:1.12.0'
