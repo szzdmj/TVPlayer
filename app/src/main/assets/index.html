@@ -2,35 +2,119 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <title>TVPlayer WebShell（Android 5+）</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title>TVPlayer WebShell（稳定外挂 + 复制播放）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
   <style>
     body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans CJK","PingFang SC","Microsoft YaHei",sans-serif; margin:8px; }
     h3 { margin:6px 0; }
-    #log { border:1px solid #ccc; padding:8px; height:40vh; overflow:auto; background:#f9f9f9; font:12px/1.4 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; }
+    #log { border:1px solid #ccc; padding:8px; height:30vh; overflow:auto; background:#f9f9f9; font:12px/1.4 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; }
     .row { margin:6px 0; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
     button { padding:6px 10px; }
     input[type="text"] { flex:1 1 340px; padding:6px 8px; border:1px solid #ccc; border-radius:4px; min-width:220px; }
-    #cb { border:1px solid #ccc; background:#ffe; padding:8px; margin-top:8px; white-space:pre-wrap; }
     .hint { color:#666; font-size:12px; }
   </style>
+
+  <!-- 轻量日志器 -->
   <script>
-    (function(){
-      var start = Date.now();
-      function ts(){ return "["+(Date.now()-start)+"ms] "; }
-      function out(msg){ var e=document.getElementById('log'); var d=document.createElement('div'); d.textContent=ts()+msg; e.appendChild(d); e.scrollTop=e.scrollHeight; }
-      window.L = { log: out, info: out, warn: out, error: out };
-      window.addEventListener('error', function(e){
-        try{
-          if (e && e.target && e.target.tagName==='SCRIPT') out('Script load failed: '+(e.target.src||'(inline)'));
-          else out('Unhandled error: ' + (e.message||e));
-        }catch(_){}
-      }, true);
-      window.addEventListener('DOMContentLoaded', function(){
-        L.info('UserAgent: '+navigator.userAgent);
-        L.info('Location: '+location.href);
-      });
-    })();
+  (function(){
+    var start = Date.now();
+    function ts(){ return '[' + (Date.now()-start) + 'ms] '; }
+    function print(level, msg){
+      var pre = document.getElementById('log'); if(!pre) return;
+      var div = document.createElement('div'); div.className = level;
+      div.textContent = ts() + level + ': ' + msg;
+      pre.appendChild(div); pre.scrollTop = pre.scrollHeight;
+    }
+    window.L = {
+      info: function(m){ print('INFO', m); },
+      warn: function(m){ print('WARN', m); },
+      error:function(m){ print('ERROR',m); }
+    };
+    window.addEventListener('error', function(e){
+      try{
+        if (e && e.target && e.target.tagName === 'SCRIPT')
+          L.error('Script load failed: ' + (e.target.src || '(inline)'));
+        else
+          L.error('Unhandled error: ' + (e.message||e));
+      }catch(_){}
+    }, true);
+    window.addEventListener('DOMContentLoaded', function(){
+      L.info('UserAgent: '+navigator.userAgent);
+      L.info('Location: '+location.href);
+    });
+  })();
+  </script>
+
+  <!-- 外挂捕获 define/module/exports（兼容 AMD/CommonJS/UMD），在加载 webjs.js 之前注入 -->
+  <script>
+  (function(){
+    if (typeof window.globalThis === 'undefined') {
+      try { Object.defineProperty(Object.prototype, '__gt__', { get: function(){ return this; }, configurable: true }); window.globalThis = __gt__; delete Object.prototype.__gt__; }
+      catch(e){ try{ window.globalThis = (function(){ return this; })(); }catch(e2){} }
+    }
+    window.__webjsCapture = { amdReturned: null };
+
+    var prevDefine = window.define, prevModule = window.module, prevExports = window.exports;
+
+    window.define = function(deps, factory){
+      if (typeof deps === 'function'){ factory = deps; }
+      try { window.__webjsCapture.amdReturned = (typeof factory === 'function') ? factory() : factory; }
+      catch(e){ L.error('AMD define 执行失败：' + e); }
+    };
+    window.define.amd = true;
+
+    window.module = { exports: {} };
+    window.exports = window.module.exports;
+
+    window.__restoreModuleShims = function(){
+      try { window.define  = prevDefine; }  catch(_){}
+      try { window.module  = prevModule; }  catch(_){}
+      try { window.exports = prevExports; } catch(_){}
+    };
+  })();
+  </script>
+
+  <!-- ES5 兜底“转译+装载”器：把常见 ES6 语法粗略转为 ES5 后 eval（仅在原始方式失败时使用） -->
+  <script>
+  (function(){
+    function replaceAll(s, re, rep){ return s.replace(re, rep); }
+    function transpileToES5(code){
+      try {
+        if (code && code.charCodeAt(0) === 0xFEFF) code = code.slice(1);
+        code = replaceAll(code, /\bexport\s+default\s+/g, 'window.__webjsDefaultExport = ');
+        code = replaceAll(code, /\bexport\s+function\s+([A-Za-z_$][\w$]*)\s*\(/g, 'function $1(');
+        code = replaceAll(code, /\blet\s+/g, 'var ');
+        code = replaceAll(code, /\bconst\s+/g, 'var ');
+        code = replaceAll(code, /(\([^\)]*\))\s*=>\s*\{/g, 'function $1 {');
+        code = replaceAll(code, /([A-Za-z_$][\w$]*)\s*=>\s*\{/g, 'function($1) {');
+        code = replaceAll(code, /(\([^\)]*\))\s*=>\s*([^{}\n;]+)(?=[;\n,}])/g, 'function $1 { return $2 }');
+        code = replaceAll(code, /([A-Za-z_$][\w$]*)\s*=>\s*([^{}\n;]+)(?=[;\n,}])/g, 'function($1){ return $2 }');
+        return code;
+      } catch (e) { L.error('转译失败：' + e); return code; }
+    }
+    function xhrLoadText(url, ok, fail){
+      try{
+        var x = new XMLHttpRequest();
+        if (x.overrideMimeType) x.overrideMimeType('text/plain; charset=utf-8');
+        x.onreadystatechange = function(){
+          if (x.readyState === 4){
+            if (x.status === 0 || (x.status >= 200 && x.status < 300)) ok(x.responseText);
+            else fail && fail('HTTP ' + x.status);
+          }
+        };
+        x.open('GET', url, true);
+        x.send(null);
+      }catch(e){ fail && fail('XHR 异常：' + e); }
+    }
+    window.__webjsCompatEval = function(url, done){
+      xhrLoadText(url, function(src){
+        var code = transpileToES5(String(src||''));
+        try { (0, eval)(code + '\n//# sourceURL=' + url + '.compat.js'); L.info('webjs.js 兼容模式执行完成'); done && done(true); }
+        catch(e){ L.error('兼容模式 eval 失败：' + e); done && done(false); }
+      }, function(err){ L.error('兼容模式加载失败：' + err); done && done(false); });
+    };
+  })();
   </script>
 </head>
 <body>
@@ -38,74 +122,126 @@
   <div id="log" aria-label="日志输出"></div>
 
   <div class="row">
-    <button onclick="ensureWebjs(function(){ callLoadWeb(); })">加载 webjs.js 并调用 loadWeb()</button>
+    <button onclick="tryLoadWebjs()">尝试加载 webjs.js</button>
+    <button onclick="callLoadWeb()">调用 loadWeb()</button>
   </div>
 
-  <!-- 新增：复制/粘贴网址并播放 -->
+  <!-- 复制/粘贴网址并播放 -->
   <div class="row" aria-label="复制网址播放">
-    <input id="urlInput" type="text" placeholder="粘贴要播放的链接（http/https/rtsp/rtmp 等）" />
+    <input id="urlInput" type="text" placeholder="粘贴要播放的链接（http/https/rtsp/rtmp/file/content 等）" />
     <button onclick="pasteFromClipboard()">从剪贴板粘贴</button>
     <button onclick="playFromInput()">播放该链接</button>
     <button onclick="playFromClipboard()">从剪贴板播放</button>
   </div>
   <div class="row hint">
-    提示：优先调用 Android.playUrl(url) 或 webjs.playUrl(url)；若未注入，则直接跳转到链接尝试系统/应用内处理。
+    优先调用 Android.playUrl(url) 或 webjs.playUrl(url)；未注入则直接跳转链接交给系统/应用处理。
   </div>
 
-  <div id="cb" aria-label="回调显示区域">回调输出：暂无</div>
-
   <script>
-    function setCB(name, v){
-      var e = document.getElementById('cb');
+    // ====== 稳健外挂加载 webjs.js ======
+    function resolveLoadWebFromExports(){
       try {
-        e.textContent = name + ': ' + (typeof v==='string' ? v : JSON.stringify(v));
-      } catch(_) {
-        e.textContent = name + ': [unserializable]';
+        if (typeof window.loadWeb === 'function') return true;
+
+        var mexp = (window.module && window.module.exports) ? window.module.exports : null;
+        if (mexp) {
+          if (typeof mexp.loadWeb === 'function'){ window.loadWeb = mexp.loadWeb; return true; }
+          if (mexp.default && typeof mexp.default.loadWeb === 'function'){ window.loadWeb = mexp.default.loadWeb; return true; }
+          if (typeof mexp === 'function'){ window.loadWeb = mexp; return true; }
+        }
+
+        var amd = window.__webjsCapture && window.__webjsCapture.amdReturned;
+        if (amd) {
+          if (typeof amd.loadWeb === 'function'){ window.loadWeb = amd.loadWeb; return true; }
+          if (amd.default && typeof amd.default.loadWeb === 'function'){ window.loadWeb = amd.default.loadWeb; return true; }
+          if (typeof amd === 'function'){ window.loadWeb = amd; return true; }
+        }
+
+        var k, v, lw=null;
+        for (k in window) {
+          if (!window.hasOwnProperty(k)) continue;
+          if (k === 'loadWeb' || k === 'module' || k === 'exports' || k === '__webjsCapture' || k === 'define') continue;
+          try { v = window[k]; } catch(e){ continue; }
+          if (v && typeof v === 'object') {
+            if (typeof v.loadWeb === 'function'){ lw = v.loadWeb; break; }
+            if (v.default && typeof v.default.loadWeb === 'function'){ lw = v.default.loadWeb; break; }
+          }
+        }
+        if (lw){ window.loadWeb = lw; return true; }
+
+        if (window.__webjsDefaultExport) {
+          var d = window.__webjsDefaultExport;
+          if (typeof d.loadWeb === 'function'){ window.loadWeb = d.loadWeb; return true; }
+          if (typeof d === 'function'){ window.loadWeb = d; return true; }
+        }
+        return false;
+      } catch(e){
+        L.error('解析 loadWeb 失败：' + e);
+        return false;
       }
     }
-    // 供 webjs 调用的回调（如有）
-    function FoundMedia(media){ L.info('FoundMedia called'); setCB('FoundMedia', media); }
-    function FoundSite(site){ window.szsite = site; L.info('FoundSite: '+site); setCB('FoundSite', site); }
 
-    // 简易加载器（相对路径）
-    var __wloading=false, __wloaded=false, __waiters=[];
-    function ensureWebjs(cb){
-      if (__wloaded) { try{cb&&cb();}catch(_){ } return; }
+    var __webjsLoading=false, __webjsLoaded=false, __waiters=[], __compatTried=false;
+
+    function ensureWebjsLoaded(cb){
+      if (__webjsLoaded) { try{ cb&&cb(); }catch(_){ } return; }
       __waiters.push(cb);
-      if (__wloading) return; __wloading=true;
+      if (__webjsLoading) return; __webjsLoading = true;
+
       var s=document.createElement('script'); s.src='webjs.js';
-      s.onload=function(){ __wloaded=true; L.info('webjs.js loaded'); flushWaiters(); };
-      s.onerror=function(){ L.warn('webjs.js load failed (not found).'); flushWaiters(); };
+      s.onload=function(){
+        L.info('webjs.js 加载成功（原始模式）');
+        if (typeof window.__restoreModuleShims === 'function') window.__restoreModuleShims();
+        var ok = resolveLoadWebFromExports();
+        if (!ok && !__compatTried) {
+          __compatTried = true;
+          L.warn('尝试兼容转译模式加载 webjs.js（ES5 化）...');
+          window.__webjsCompatEval('webjs.js', function(){
+            ok = resolveLoadWebFromExports();
+            doneAll();
+          });
+          return;
+        }
+        doneAll();
+      };
+      s.onerror=function(){
+        L.error('webjs.js 加载失败（原始模式）');
+        if (typeof window.__restoreModuleShims === 'function') window.__restoreModuleShims();
+        if (!__compatTried) {
+          __compatTried = true;
+          L.warn('回退到兼容转译模式加载 webjs.js...');
+          window.__webjsCompatEval('webjs.js', function(){ resolveLoadWebFromExports(); doneAll(); });
+        } else { doneAll(); }
+      };
       document.head.appendChild(s);
+
+      function doneAll(){
+        __webjsLoaded = true;
+        var list = __waiters.slice(); __waiters.length = 0;
+        for (var i=0;i<list.length;i++){ try{ list[i]&&list[i](); }catch(e){ L.error('webjs 回调异常：'+e); } }
+      }
     }
-    function flushWaiters(){ var a=__waiters.slice(); __waiters.length=0; for (var i=0;i<a.length;i++){ try{ a[i]&&a[i](); }catch(_){ } } }
+
+    function tryLoadWebjs(){ ensureWebjsLoaded(function(){ L.info('tryLoadWebjs: 已加载流程完成'); }); }
 
     function callLoadWeb(){
-      if (typeof window.loadWeb!=='function'){ L.warn('window.loadWeb 未定义'); return; }
-      try { L.info('调用 loadWeb()'); window.loadWeb(); } catch(e){ L.error('loadWeb 异常: '+e); }
+      ensureWebjsLoaded(function(){
+        if (typeof window.loadWeb !== 'function') { L.warn('loadWeb 未定义'); return; }
+        try { L.info('调用 loadWeb()'); window.loadWeb(); } catch(e){ L.error('loadWeb 异常: '+e); }
+      });
     }
 
-    // ============ 复制/粘贴/播放 ============
-
+    // ====== 复制/粘贴/播放 ======
     function normalizeUrl(u){
       if (!u) return '';
       u = (''+u).trim();
-      // 允许的常见协议
       var ok = /^(https?|rtsp|rtmp|file|content):/i.test(u);
       if (!ok) {
-        // 如果用户漏写协议且像是域名/路径，默认补 http
-        if (/^([a-z0-9.-]+)(:\\d+)?\\//i.test(u) || /^[a-z0-9.-]+$/i.test(u)) {
-          u = 'http://' + u;
-        }
+        if (/^([a-z0-9.-]+)(:\d+)?\//i.test(u) || /^[a-z0-9.-]+$/i.test(u)) u = 'http://' + u;
       }
       return u;
     }
-
-    function isLikelyPlayable(u){
-      if (!u) return false;
-      if (/^(https?|rtsp|rtmp|file|content):/i.test(u)) return true;
-      return false;
-    }
+    function isLikelyPlayable(u){ return !!u && /^(https?|rtsp|rtmp|file|content):/i.test(u); }
 
     async function pasteFromClipboard(){
       var input = document.getElementById('urlInput');
@@ -115,98 +251,65 @@
           input.value = text || input.value;
           if (text) L.info('已从剪贴板读取链接');
         } else {
-          // 老版 WebView 兜底：提示用户手动粘贴
-          var t = prompt('剪贴板不可用，请手动粘贴链接:');
-          if (t) input.value = t;
+          var t = prompt('剪贴板不可用，请手动粘贴链接:'); if (t) input.value = t;
         }
       } catch (e) {
         L.warn('读取剪贴板失败：' + e);
-        var t2 = prompt('读取剪贴板失败，请手动粘贴链接:');
-        if (t2) input.value = t2;
+        var t2 = prompt('读取剪贴板失败，请手动粘贴链接:'); if (t2) input.value = t2;
       }
     }
 
-    function playFromInput(){
-      var u = document.getElementById('urlInput').value;
-      playUrl(u);
-    }
+    function playFromInput(){ var u = document.getElementById('urlInput').value; playUrl(u); }
 
     async function playFromClipboard(){
       let u = '';
-      try {
-        if (navigator.clipboard && navigator.clipboard.readText) {
-          u = await navigator.clipboard.readText();
-        }
-      } catch(e) {
-        L.warn('读取剪贴板失败：' + e);
-      }
-      if (!u) {
-        // 再尝试从输入框
-        u = document.getElementById('urlInput').value;
-      }
+      try { if (navigator.clipboard && navigator.clipboard.readText) u = await navigator.clipboard.readText(); } catch(e){ L.warn('读取剪贴板失败：' + e); }
+      if (!u) u = document.getElementById('urlInput').value;
       playUrl(u);
     }
 
     function playUrl(u){
       u = normalizeUrl(u);
       if (!u) { L.warn('未提供链接'); return; }
-      if (!isLikelyPlayable(u)) {
-        L.warn('链接可能不可播放：' + u);
-      }
-
+      if (!isLikelyPlayable(u)) L.warn('链接可能不可播放：' + u);
       L.info('准备播放：' + u);
 
-      // 1) 优先调用 Android 注入的接口（如 WebView.addJavascriptInterface 注入了 Android.playUrl）
-      try {
-        if (window.Android && typeof Android.playUrl === 'function') {
-          Android.playUrl(u);
-          L.info('已调用 Android.playUrl');
-          return;
-        }
-      } catch(e){ L.warn('调用 Android.playUrl 失败：' + e); }
+      // 1) 优先 Android 接口
+      try { if (window.Android && typeof Android.playUrl === 'function') { Android.playUrl(u); L.info('已调用 Android.playUrl'); return; } }
+      catch(e){ L.warn('调用 Android.playUrl 失败：' + e); }
 
-      // 2) 其次调用 webjs.js 提供的 playUrl（若有）
-      try {
-        if (typeof window.playUrl === 'function') {
-          window.playUrl(u);
-          L.info('已调用 webjs.playUrl');
-          return;
-        }
-      } catch(e){ L.warn('调用 webjs.playUrl 失败：' + e); }
+      // 2) webjs 提供的接口
+      try { if (typeof window.playUrl === 'function') { window.playUrl(u); L.info('已调用 webjs.playUrl'); return; } }
+      catch(e){ L.warn('调用 webjs.playUrl 失败：' + e); }
 
-      // 3) 兜底：直接跳转该链接，交给系统/应用处理
-      try {
-        location.href = u;
-        L.info('已跳转到该链接（兜底策略）');
-      } catch(e){
-        L.error('跳转失败：' + e);
-      }
+      // 3) 兜底：跳转
+      try { location.href = u; L.info('已跳转到该链接（兜底策略）'); }
+      catch(e){ L.error('跳转失败：' + e); }
     }
 
-    // 回车快速播放
-    (function bindEnter(){
-      var input = null;
+    // 回车提交
+    (function(){
       window.addEventListener('DOMContentLoaded', function(){
-        input = document.getElementById('urlInput');
-        input && input.addEventListener('keydown', function(ev){
-          if (ev.key === 'Enter') {
-            ev.preventDefault();
-            playFromInput();
-          }
-        });
+        var input = document.getElementById('urlInput');
+        input && input.addEventListener('keydown', function(ev){ if (ev.key === 'Enter') { ev.preventDefault(); playFromInput(); } });
       });
     })();
 
-    // 页面加载完后自动尝试
-    (function autoTry(){
-      ensureWebjs(function(){
-        if (typeof window.loadWeb==='function') {
-          try { window.loadWeb(); } catch(e){ L.error('auto loadWeb 异常: '+e); }
+    // 自启动：日志 + 预加载尝试
+    (function(){
+      tryLoadWebjs();
+      ensureWebjsLoaded(function(){
+        if (typeof window.loadWeb === 'function') {
+          try { window.loadWeb(); } catch(e){ L.error('自动调用 loadWeb 失败：' + e); }
         } else {
-          L.warn('auto: loadWeb 未定义');
+          L.warn('自动调用：loadWeb 未定义（已尝试外挂与兼容转译）。');
         }
       });
     })();
+
+    // 可选回调（若 webjs 调用）
+    function FoundMedia(media){ L.info('FoundMedia 被调用'); }
+    function FoundSite(site){ window.szsite = site; L.info('FoundSite：' + site); }
   </script>
 </body>
 </html>
