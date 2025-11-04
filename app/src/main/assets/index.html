@@ -8,9 +8,11 @@
     body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans CJK","PingFang SC","Microsoft YaHei",sans-serif; margin:8px; }
     h3 { margin:6px 0; }
     #log { border:1px solid #ccc; padding:8px; height:40vh; overflow:auto; background:#f9f9f9; font:12px/1.4 ui-monospace,Menlo,Consolas,monospace; white-space:pre-wrap; }
-    .row { margin:6px 0; }
+    .row { margin:6px 0; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
     button { padding:6px 10px; }
+    input[type="text"] { flex:1 1 340px; padding:6px 8px; border:1px solid #ccc; border-radius:4px; min-width:220px; }
     #cb { border:1px solid #ccc; background:#ffe; padding:8px; margin-top:8px; white-space:pre-wrap; }
+    .hint { color:#666; font-size:12px; }
   </style>
   <script>
     (function(){
@@ -37,6 +39,17 @@
 
   <div class="row">
     <button onclick="ensureWebjs(function(){ callLoadWeb(); })">加载 webjs.js 并调用 loadWeb()</button>
+  </div>
+
+  <!-- 新增：复制/粘贴网址并播放 -->
+  <div class="row" aria-label="复制网址播放">
+    <input id="urlInput" type="text" placeholder="粘贴要播放的链接（http/https/rtsp/rtmp 等）" />
+    <button onclick="pasteFromClipboard()">从剪贴板粘贴</button>
+    <button onclick="playFromInput()">播放该链接</button>
+    <button onclick="playFromClipboard()">从剪贴板播放</button>
+  </div>
+  <div class="row hint">
+    提示：优先调用 Android.playUrl(url) 或 webjs.playUrl(url)；若未注入，则直接跳转到链接尝试系统/应用内处理。
   </div>
 
   <div id="cb" aria-label="回调显示区域">回调输出：暂无</div>
@@ -71,6 +84,118 @@
       if (typeof window.loadWeb!=='function'){ L.warn('window.loadWeb 未定义'); return; }
       try { L.info('调用 loadWeb()'); window.loadWeb(); } catch(e){ L.error('loadWeb 异常: '+e); }
     }
+
+    // ============ 复制/粘贴/播放 ============
+
+    function normalizeUrl(u){
+      if (!u) return '';
+      u = (''+u).trim();
+      // 允许的常见协议
+      var ok = /^(https?|rtsp|rtmp|file|content):/i.test(u);
+      if (!ok) {
+        // 如果用户漏写协议且像是域名/路径，默认补 http
+        if (/^([a-z0-9.-]+)(:\\d+)?\\//i.test(u) || /^[a-z0-9.-]+$/i.test(u)) {
+          u = 'http://' + u;
+        }
+      }
+      return u;
+    }
+
+    function isLikelyPlayable(u){
+      if (!u) return false;
+      if (/^(https?|rtsp|rtmp|file|content):/i.test(u)) return true;
+      return false;
+    }
+
+    async function pasteFromClipboard(){
+      var input = document.getElementById('urlInput');
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          const text = await navigator.clipboard.readText();
+          input.value = text || input.value;
+          if (text) L.info('已从剪贴板读取链接');
+        } else {
+          // 老版 WebView 兜底：提示用户手动粘贴
+          var t = prompt('剪贴板不可用，请手动粘贴链接:');
+          if (t) input.value = t;
+        }
+      } catch (e) {
+        L.warn('读取剪贴板失败：' + e);
+        var t2 = prompt('读取剪贴板失败，请手动粘贴链接:');
+        if (t2) input.value = t2;
+      }
+    }
+
+    function playFromInput(){
+      var u = document.getElementById('urlInput').value;
+      playUrl(u);
+    }
+
+    async function playFromClipboard(){
+      let u = '';
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          u = await navigator.clipboard.readText();
+        }
+      } catch(e) {
+        L.warn('读取剪贴板失败：' + e);
+      }
+      if (!u) {
+        // 再尝试从输入框
+        u = document.getElementById('urlInput').value;
+      }
+      playUrl(u);
+    }
+
+    function playUrl(u){
+      u = normalizeUrl(u);
+      if (!u) { L.warn('未提供链接'); return; }
+      if (!isLikelyPlayable(u)) {
+        L.warn('链接可能不可播放：' + u);
+      }
+
+      L.info('准备播放：' + u);
+
+      // 1) 优先调用 Android 注入的接口（如 WebView.addJavascriptInterface 注入了 Android.playUrl）
+      try {
+        if (window.Android && typeof Android.playUrl === 'function') {
+          Android.playUrl(u);
+          L.info('已调用 Android.playUrl');
+          return;
+        }
+      } catch(e){ L.warn('调用 Android.playUrl 失败：' + e); }
+
+      // 2) 其次调用 webjs.js 提供的 playUrl（若有）
+      try {
+        if (typeof window.playUrl === 'function') {
+          window.playUrl(u);
+          L.info('已调用 webjs.playUrl');
+          return;
+        }
+      } catch(e){ L.warn('调用 webjs.playUrl 失败：' + e); }
+
+      // 3) 兜底：直接跳转该链接，交给系统/应用处理
+      try {
+        location.href = u;
+        L.info('已跳转到该链接（兜底策略）');
+      } catch(e){
+        L.error('跳转失败：' + e);
+      }
+    }
+
+    // 回车快速播放
+    (function bindEnter(){
+      var input = null;
+      window.addEventListener('DOMContentLoaded', function(){
+        input = document.getElementById('urlInput');
+        input && input.addEventListener('keydown', function(ev){
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            playFromInput();
+          }
+        });
+      });
+    })();
 
     // 页面加载完后自动尝试
     (function autoTry(){
