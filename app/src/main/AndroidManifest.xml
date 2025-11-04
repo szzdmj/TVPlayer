@@ -57,7 +57,7 @@
             </intent-filter>
         </activity>
 
-        <!-- 原播放界面：去掉 MAIN/LAUNCHER，保留外部调用（VIEW/SEND 等） -->
+        <!-- 原播放器：去掉 MAIN/LAUNCHER，保留外部调用（VIEW/SEND 等） -->
         <activity
             android:name=".PlayerActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|touchscreen"
@@ -66,7 +66,7 @@
             android:supportsPictureInPicture="true"
             tools:targetApi="n">
 
-            <!-- 分享文本链接跳转到播放器 -->
+            <!-- 分享文本链接 -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -81,7 +81,7 @@
                 <data android:scheme="rtsp" />
             </intent-filter>
 
-            <!-- 常见视频协议/来源（http/https/file/content），泛化到 video/*；附加常见字幕类型 -->
+            <!-- 常见视频来源（http/https/file/content），泛化到 video/*；附字幕类型 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
