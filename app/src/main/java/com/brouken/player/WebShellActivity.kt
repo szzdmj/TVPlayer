@@ -1,19 +1,30 @@
 package com.brouken.player
 
 import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
-import android.webkit.ServiceWorkerClient
-import android.webkit.ServiceWorkerController
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.webkit.WebViewAssetLoader
-import androidx.webkit.WebViewClientCompat
-import androidx.webkit.WebViewFeature
 
 class WebShellActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+
+    private class JSBridge(private val activity: AppCompatActivity) {
+        @JavascriptInterface
+        fun playUrl(url: String?) {
+            if (url.isNullOrBlank()) return
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url.trim()))
+                activity.startActivity(intent)
+            } catch (_: Throwable) {
+            }
+        }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -21,35 +32,21 @@ class WebShellActivity : AppCompatActivity() {
         webView = WebView(this)
         setContentView(webView)
 
-        val settings = webView.settings
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        settings.allowFileAccess = false
-        settings.allowContentAccess = true
-        settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-        // 如需调试:
-        // WebView.setWebContentsDebuggingEnabled(true)
+        WebView.setWebContentsDebuggingEnabled(true)
 
-        // 用 https://appassets.androidplatform.net 映射本地 assets/
-        val assetLoader = WebViewAssetLoader.Builder()
-            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
-            .build()
+        val s: WebSettings = webView.settings
+        s.javaScriptEnabled = true
+        s.domStorageEnabled = true
+        s.allowFileAccess = true
+        s.allowContentAccess = true
+        s.mediaPlaybackRequiresUserGesture = false
+        s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
 
-        webView.webViewClient = object : WebViewClientCompat() {
-            override fun shouldInterceptRequest(
-                view: WebView,
-                request: android.webkit.WebResourceRequest
-            ) = assetLoader.shouldInterceptRequest(request.url)
-        }
+        webView.webChromeClient = WebChromeClient()
+        webView.addJavascriptInterface(JSBridge(this), "Android")
 
-        // 可选：启用 Service Worker（WebView 版本足够高时）
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE)) {
-            val controller = ServiceWorkerController.getInstance()
-            controller.setServiceWorkerClient(object : ServiceWorkerClient() {})
-        }
-
-        // 加载本地 index.html（放在 app/src/main/assets/index.html）
-        webView.loadUrl("https://appassets.androidplatform.net/assets/index.html")
+        // 直接加载本地 assets 下的 index.html
+        webView.loadUrl("file:///android_asset/index.html")
     }
 
     override fun onDestroy() {
