@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Release 默认关闭 WebShell 启动图标 -->
+    <bool name="enable_webshell_launcher">false</bool>
+</resources>
