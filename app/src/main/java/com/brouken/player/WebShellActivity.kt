@@ -1,152 +1,152 @@
 package com.brouken.player
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
+import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.ViewGroup
-import android.webkit.WebView
+import android.webkit.*
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
-class WebInfoActivity : AppCompatActivity() {
+class WebShellActivity : AppCompatActivity() {
 
-    private lateinit var infoView: TextView
+    private var webView: WebView? = null
+    @Volatile private var playEnabled: Boolean = false
 
+    private fun isPlayableUrl(u: String?): Boolean {
+        if (u.isNullOrBlank()) return false
+        val s = u.trim().lowercase()
+        return s.startsWith("http://") || s.startsWith("https://") ||
+               s.startsWith("rtsp://") || s.startsWith("rtmp://") ||
+               s.startsWith("file://") || s.startsWith("content://")
+    }
+
+    private inner class JSBridge {
+        @JavascriptInterface fun enablePlay(enabled: Boolean) {
+            playEnabled = enabled
+            runOnUiThread {
+                Toast.makeText(this@WebShellActivity, if (enabled) "已解锁播放" else "已上锁播放", Toast.LENGTH_SHORT).show()
+            }
+        }
+        @JavascriptInterface fun isPlayEnabled(): Boolean = playEnabled
+
+        @JavascriptInterface fun playUrl(url: String?) {
+            val u = url?.trim().orEmpty()
+            if (!playEnabled) {
+                runOnUiThread {
+                    Toast.makeText(this@WebShellActivity, "已拦截播放（未解锁）", Toast.LENGTH_LONG).show()
+                }
+                return
+            }
+            if (!isPlayableUrl(u)) {
+                runOnUiThread {
+                    Toast.makeText(this@WebShellActivity, "已拦截播放：无效链接或不支持的协议", Toast.LENGTH_LONG).show()
+                }
+                return
+            }
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+            } catch (_: Throwable) {
+                runOnUiThread { Toast.makeText(this@WebShellActivity, "无法打开此链接", Toast.LENGTH_LONG).show() }
+            }
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 根布局（纯原生 UI，避免任何跳转）
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(32, 32, 32, 32)
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        }
-
-        val title = TextView(this).apply {
-            text = "TVPlayer WebShell 环境信息"
-            textSize = 18f
-        }
-
-        val btnRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.START
-        }
-
-        val btnRefresh = Button(this).apply {
-            text = "刷新"
-            setOnClickListener { renderInfo() }
-        }
-        val btnCopy = Button(this).apply {
-            text = "复制"
-            setOnClickListener {
-                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                cm.setPrimaryClip(ClipData.newPlainText("env", infoView.text))
-                Toast.makeText(this@WebInfoActivity, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+        if (Build.VERSION.SDK_INT >= 24) {
+            val pkg = try { WebView.getCurrentWebViewPackage() } catch (_: Throwable) { null }
+            if (pkg == null) {
+                showNoWebViewScreen("此设备未安装或禁用了 Android System WebView，无法显示内置网页。")
+                return
             }
         }
-        val btnOpenWebShell = Button(this).apply {
-            text = "打开 WebShell"
+
+        val wv = try { WebView(this) } catch (t: Throwable) {
+            showNoWebViewScreen("WebView 初始化失败：${t.javaClass.simpleName}")
+            return
+        }
+        webView = wv
+        setContentView(wv)
+
+        WebView.setWebContentsDebuggingEnabled(true)
+        wv.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            allowFileAccess = true
+            allowContentAccess = true
+            mediaPlaybackRequiresUserGesture = false
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            setSupportMultipleWindows(false) // 禁止多窗口
+        }
+
+        // 强拦截：页面内任何导航都不离开本地 index.html
+        wv.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                return true // 全部拦截
+            }
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                return true // 旧 API 也拦截
+            }
+        }
+        // 禁止新窗口
+        wv.webChromeClient = object : WebChromeClient() {
+            override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message?): Boolean {
+                return false
+            }
+        }
+
+        // 注入 JS 桥（默认“上锁播放”）
+        wv.addJavascriptInterface(JSBridge(), "Android")
+
+        wv.loadUrl("file:///android_asset/index.html")
+    }
+
+    private fun showNoWebViewScreen(message: String) {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(32, 48, 32, 48)
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+        val tv = TextView(this).apply { text = message; textSize = 16f }
+        val btnInstall = Button(this).apply {
+            text = "安装/启用 Android System WebView"
             setOnClickListener {
+                val pkg = "com.google.android.webview"
                 try {
-                    // 打开 WebShellActivity（不传任何播放 URL，避免触发播放器）
-                    startActivity(Intent(this@WebInfoActivity, WebShellActivity::class.java))
-                } catch (t: Throwable) {
-                    Toast.makeText(this@WebInfoActivity, "无法打开 WebShell: ${t.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")))
+                } catch (_: ActivityNotFoundException) {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$pkg")))
+                    } catch (_: Exception) {
+                        Toast.makeText(this@WebShellActivity, "无法打开应用市场或浏览器", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         }
-        btnRow.addView(btnRefresh)
-        btnRow.addView(space(12))
-        btnRow.addView(btnCopy)
-        btnRow.addView(space(12))
-        btnRow.addView(btnOpenWebShell)
-
-        infoView = TextView(this).apply {
-            textSize = 13f
-            setTextIsSelectable(true)
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        }
-
-        val scroll = ScrollView(this).apply {
-            addView(infoView, ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ))
-        }
-
-        root.addView(title, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
-        root.addView(space(8))
-        root.addView(btnRow, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        ))
-        root.addView(space(12))
-        root.addView(scroll, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            0, 1f
-        ))
-
+        val btnClose = Button(this).apply { text = "关闭"; setOnClickListener { finish() } }
+        root.addView(tv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 24 })
+        root.addView(btnInstall, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 16 })
+        root.addView(btnClose, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         setContentView(root)
-        renderInfo()
     }
 
-    private fun space(w: Int): TextView = TextView(this).apply { width = (w * resources.displayMetrics.density).toInt() }
-
-    private fun renderInfo() {
-        val dm: DisplayMetrics = resources.displayMetrics
-        val sb = StringBuilder()
-
-        // 基本与设备
-        sb.appendLine("App Package: ${packageName}")
-        sb.appendLine("Android SDK: ${Build.VERSION.SDK_INT} (${Build.VERSION.RELEASE})")
-        sb.appendLine("Brand/Model: ${Build.BRAND} / ${Build.MODEL}")
-        sb.appendLine("Locale: ${resources.configuration.locales?.get(0)}")
-        sb.appendLine()
-
-        // 屏幕与窗口
-        sb.appendLine("Screen: ${dm.widthPixels} x ${dm.heightPixels} @${dm.densityDpi}dpi  (dp: ${dm.widthPixels/dm.density} x ${dm.heightPixels/dm.density})")
-        val vpW = window?.decorView?.width ?: 0
-        val vpH = window?.decorView?.height ?: 0
-        if (vpW > 0 && vpH > 0) sb.appendLine("Viewport: ${vpW} x ${vpH}")
-        sb.appendLine()
-
-        // WebView 提供方
-        val webviewPkg = try { if (Build.VERSION.SDK_INT >= 24) WebView.getCurrentWebViewPackage()?.packageName else "(API<24)" } catch (_: Throwable) { "(error)" }
-        val webviewVer = try { if (Build.VERSION.SDK_INT >= 24) WebView.getCurrentWebViewPackage()?.versionName else "" } catch (_: Throwable) { "" }
-        sb.appendLine("WebView Provider: $webviewPkg $webviewVer")
-        sb.appendLine()
-
-        // 网络与能力（简要）
-        val conn = try { (getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).activeNetworkInfo } catch (_: Throwable) { null }
-        if (conn != null) {
-            sb.appendLine("Network: ${conn.typeName} / connected=${conn.isConnected}")
-            sb.appendLine()
+    override fun onDestroy() {
+        super.onDestroy()
+        webView?.let { w ->
+            (w.parent as? ViewGroup)?.removeView(w)
+            w.destroy()
         }
-
-        // 说明
-        sb.appendLine("说明：")
-        sb.appendLine("1) 该页面为原生信息面板，不使用 WebView、不会跳转。")
-        sb.appendLine("2) 点击“打开 WebShell”后，才会进入 WebView 页面。")
-        sb.appendLine("3) 若进入 WebShell 后仍发生跳转，多半是网页脚本尝试播放，建议先在 WebShell 页面内保持“上锁播放”。")
-
-        infoView.text = sb.toString()
+        webView = null
     }
 }
