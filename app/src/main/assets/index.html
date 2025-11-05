@@ -51,17 +51,14 @@
     window.__webjsCapture = { amdReturned: null };
 
     var prevDefine = window.define, prevModule = window.module, prevExports = window.exports;
-
     window.define = function(deps, factory){
       if (typeof deps === 'function'){ factory = deps; }
       try { window.__webjsCapture.amdReturned = (typeof factory === 'function') ? factory() : factory; }
       catch(e){ L.error('AMD define 执行失败：' + e); }
     };
     window.define.amd = true;
-
     window.module = { exports: {} };
     window.exports = window.module.exports;
-
     window.__restoreModuleShims = function(){
       try { window.define  = prevDefine; }  catch(_){}
       try { window.module  = prevModule; }  catch(_){}
@@ -121,6 +118,12 @@
     <button onclick="callLoadWeb()">调用 loadWeb()</button>
   </div>
 
+  <!-- 播放保护：默认上锁，需要手动解锁后才真正调起播放器 -->
+  <div class="row" aria-label="播放保护">
+    <button onclick="lockPlay()">上锁播放</button>
+    <button onclick="unlockPlay()">解锁播放（本次会话）</button>
+  </div>
+
   <div class="row" aria-label="复制网址播放">
     <input id="urlInput" type="text" placeholder="粘贴要播放的链接（http/https/rtsp/rtmp/file/content 等）" />
     <button onclick="pasteFromClipboard()">从剪贴板粘贴</button>
@@ -128,7 +131,7 @@
     <button onclick="playFromClipboard()">从剪贴板播放</button>
   </div>
   <div class="row hint">
-    优先调用 Android.playUrl(url) 或 webjs.playUrl(url)；未注入则直接跳转链接交给系统/应用处理。
+    默认“上锁播放”：网页或脚本调用 Android.playUrl 都会被拦截。需要手动点“解锁播放”后再点击“调用 loadWeb()”。
   </div>
 
   <script>
@@ -225,6 +228,16 @@
       });
     }
 
+    // 播放保护：调用 Android.enablePlay
+    function unlockPlay(){
+      try { if (window.Android && typeof Android.enablePlay === 'function') Android.enablePlay(true); } catch(_){}
+      L.info('播放保护：已解锁');
+    }
+    function lockPlay(){
+      try { if (window.Android && typeof Android.enablePlay === 'function') Android.enablePlay(false); } catch(_){}
+      L.info('播放保护：已上锁');
+    }
+
     // 复制/粘贴/播放
     function normalizeUrl(u){
       if (!u) return '';
@@ -265,7 +278,7 @@
       if (!isLikelyPlayable(u)) L.warn('链接可能不可播放：' + u);
       L.info('准备播放：' + u);
 
-      try { if (window.Android && typeof Android.playUrl === 'function') { Android.playUrl(u); L.info('已调用 Android.playUrl'); return; } }
+      try { if (window.Android && typeof Android.playUrl === 'function') { Android.playUrl(u); L.info('已请求 Android.playUrl'); return; } }
       catch(e){ L.warn('调用 Android.playUrl 失败：' + e); }
 
       try { if (typeof window.playUrl === 'function') { window.playUrl(u); L.info('已调用 webjs.playUrl'); return; } }
@@ -275,19 +288,7 @@
       catch(e){ L.error('跳转失败：' + e); }
     }
 
-    // 不再“自启动”调用 loadWeb，改为完全手动
-    // 如需恢复自动：把下行 AUTO_RUN 设为 true
-    var AUTO_RUN = false;
-    if (AUTO_RUN) {
-      tryLoadWebjs();
-      ensureWebjsLoaded(function(){
-        if (typeof window.loadWeb === 'function') {
-          try { window.loadWeb(); } catch(e){ L.error('自动调用 loadWeb 失败：' + e); }
-        } else {
-          L.warn('自动调用：loadWeb 未定义（已尝试外挂与兼容转译）。');
-        }
-      });
-    }
+    // 手动模式：不自动加载、不自动调用 loadWeb
   </script>
 </body>
 </html>
