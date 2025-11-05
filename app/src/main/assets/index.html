@@ -2,184 +2,28 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <title>TVPlayer WebShell 环境信息（不跳转）</title>
+  <title>TVPlayer WebShell（本地调试页）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <style>
-    :root { color-scheme: light dark; }
-    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans CJK","PingFang SC","Microsoft YaHei",sans-serif; margin: 12px; }
-    h2 { margin: 8px 0 12px; }
-    .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin: 8px 0; }
+    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans CJK","PingFang SC","Microsoft YaHei",sans-serif; margin:12px; }
+    #log { white-space: pre-wrap; border:1px solid #ccc; padding:10px; min-height:40vh; overflow:auto; font:12px/1.5 ui-monospace,Menlo,Consolas,monospace; background:#f9f9f9; }
+    .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
     button { padding:6px 10px; }
-    #info { white-space: pre-wrap; border: 1px solid #ccc; background: #f9f9f9; padding: 10px; min-height: 40vh; overflow:auto; font: 12px/1.5 ui-monospace,Menlo,Consolas,monospace; }
-    .ok { color: #2a7; } .warn { color: #b76e00; } .err { color: #c00; }
   </style>
 </head>
 <body>
-  <h2>TVPlayer WebShell 环境信息</h2>
-
+  <h3>本地调试页（默认上锁播放；WebShellActivity 已全拦截导航）</h3>
   <div class="row">
-    <button id="btnRefresh">刷新信息</button>
-    <button id="btnCopy">复制到剪贴板</button>
+    <button onclick="unlock()">解锁播放</button>
+    <button onclick="lock()">上锁播放</button>
   </div>
-
-  <div id="info" aria-label="环境信息输出"></div>
+  <div id="log"></div>
 
   <script>
-    (function(){
-      const el = {
-        info: document.getElementById('info'),
-        btnCopy: document.getElementById('btnCopy'),
-        btnRefresh: document.getElementById('btnRefresh'),
-      };
-
-      function bool(v){ return v ? 'YES' : 'NO'; }
-      function safe(fn, fallback) { try { return fn(); } catch(e) { return fallback; } }
-      function j(v){
-        try { return JSON.stringify(v, null, 2); } catch(e){ return String(v); }
-      }
-
-      function collect() {
-        const lines = [];
-        const now = new Date();
-
-        // 基本
-        lines.push('Time: ' + now.toISOString());
-        lines.push('Timezone: ' + safe(() => Intl.DateTimeFormat().resolvedOptions().timeZone, '(unknown)'));
-        lines.push('Language(s): ' + (navigator.languages ? navigator.languages.join(', ') : navigator.language));
-        lines.push('UserAgent: ' + navigator.userAgent);
-        lines.push('Platform: ' + (navigator.platform || '(unknown)'));
-        lines.push('SecureContext: ' + bool(window.isSecureContext));
-        lines.push('');
-
-        // 位置信息
-        lines.push('Location.href: ' + location.href);
-        lines.push('Location.protocol: ' + location.protocol);
-        lines.push('Referrer: ' + document.referrer);
-        lines.push('');
-
-        // 视图/屏幕
-        lines.push('Screen: ' + screen.width + ' x ' + screen.height + ' @' + window.devicePixelRatio);
-        lines.push('Viewport: ' + document.documentElement.clientWidth + ' x ' + document.documentElement.clientHeight);
-        lines.push('');
-
-        // 功能特性
-        lines.push('Features:');
-        lines.push('  fetch: ' + bool('fetch' in window));
-        lines.push('  Promise: ' + bool('Promise' in window));
-        lines.push('  MutationObserver: ' + bool('MutationObserver' in window));
-        lines.push('  CSS.supports: ' + bool('CSS' in window && 'supports' in CSS));
-        lines.push('  ServiceWorker: ' + bool('serviceWorker' in (navigator||{})) + ' (注意: file:// 下通常不可用)');
-        lines.push('  Clipboard(readText): ' + bool(!!(navigator&&navigator.clipboard&&navigator.clipboard.readText)));
-        lines.push('  WebAssembly: ' + bool('WebAssembly' in window));
-        lines.push('  WebGL: ' + bool(!!safe(() => document.createElement("canvas").getContext("webgl"), null)));
-        lines.push('  MediaCapabilities: ' + bool('mediaCapabilities' in (navigator||{})));
-        lines.push('');
-
-        // 存储与 Cookie
-        lines.push('Storage & Cookie:');
-        const lsOK = safe(() => { localStorage.setItem('__t','1'); localStorage.removeItem('__t'); return true; }, false);
-        lines.push('  localStorage: ' + bool(lsOK));
-        lines.push('  Cookies Enabled: ' + bool(navigator.cookieEnabled));
-        lines.push('');
-
-        // 内存/性能（可能受限）
-        const perf = (performance || {});
-        const mem = perf.memory || {};
-        if (mem.jsHeapSizeLimit) {
-          lines.push('Performance.memory:');
-          lines.push('  jsHeapSizeLimit: ' + mem.jsHeapSizeLimit);
-          lines.push('  totalJSHeapSize: ' + mem.totalJSHeapSize);
-          lines.push('  usedJSHeapSize: ' + mem.usedJSHeapSize);
-          lines.push('');
-        }
-
-        // 网络信息（可能不可用）
-        const conn = (navigator && navigator.connection) || {};
-        if (conn) {
-          lines.push('Network (navigator.connection):');
-          lines.push('  effectiveType: ' + (conn.effectiveType || '(n/a)'));
-          lines.push('  downlink: ' + (conn.downlink || '(n/a)'));
-          lines.push('  rtt: ' + (conn.rtt || '(n/a)'));
-          lines.push('  saveData: ' + bool(!!conn.saveData));
-          lines.push('');
-        }
-
-        // Android JS 桥（仅检测存在性，不调用）
-        const hasAndroid = typeof window.Android !== 'undefined';
-        lines.push('Android JS Bridge: ' + bool(hasAndroid));
-        if (hasAndroid) {
-          lines.push('  typeof Android: ' + typeof Android);
-          // 尝试探测可枚举键（很多设备上不可枚举，可能为空）
-          lines.push('  keys(Android): ' + safe(() => Object.keys(Android).join(', '), '(n/a)'));
-          lines.push('');
-        }
-
-        return lines.join('\n');
-      }
-
-      function render() {
-        el.info.textContent = collect();
-      }
-
-      async function copyText() {
-        const text = el.info.textContent || '';
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(text);
-            toast('已复制到剪贴板');
-            return;
-          }
-        } catch(e){}
-        // 退化方案
-        try {
-          const ta = document.createElement('textarea');
-          ta.value = text;
-          ta.style.position='fixed'; ta.style.opacity='0'; ta.setAttribute('readonly','readonly');
-          document.body.appendChild(ta);
-          ta.select(); document.execCommand('copy');
-          document.body.removeChild(ta);
-          toast('已复制到剪贴板（兼容模式）');
-        } catch(e) {
-          toast('复制失败：' + e);
-        }
-      }
-
-      function toast(msg){
-        try{
-          // 简易 toast：追加一行临时提示
-          const div = document.createElement('div');
-          div.textContent = msg;
-          div.className = 'ok';
-          el.info.appendChild(div);
-          el.info.scrollTop = el.info.scrollHeight;
-          setTimeout(() => div.remove(), 2000);
-        }catch(_){}
-      }
-
-      // 事件绑定
-      el.btnRefresh.addEventListener('click', render);
-      el.btnCopy.addEventListener('click', copyText);
-
-      // 初次渲染
-      render();
-
-      // 防御性：阻止本页内任何 a[href] 的默认跳转（本页没有链接，但以防万一）
-      document.addEventListener('click', function(ev){
-        const a = ev.target.closest && ev.target.closest('a[href]');
-        if (a) { ev.preventDefault(); ev.stopPropagation(); }
-      }, true);
-
-      // 防御性：屏蔽本页脚本对 window.open 的调用（仅记录，不导航）
-      const _open = window.open;
-      window.open = function(){ console.log('[blocked] window.open'); return null; };
-
-      // 防御性：覆盖 location.assign/replace（仅记录，不导航）
-      const _assign = location.assign.bind(location);
-      const _replace = location.replace.bind(location);
-      location.assign = function(){ console.log('[blocked] location.assign'); };
-      location.replace = function(){ console.log('[blocked] location.replace'); };
-
-    })();
+    const L = (m)=>{ const e=document.getElementById('log'); const d=document.createElement('div'); d.textContent=m; e.appendChild(d); e.scrollTop=e.scrollHeight; };
+    function unlock(){ try{ Android && Android.enablePlay && Android.enablePlay(true); L('播放：已解锁'); }catch(e){ L('播放：解锁失败 '+e); } }
+    function lock(){ try{ Android && Android.enablePlay && Android.enablePlay(false); L('播放：已上锁'); }catch(e){ L('播放：上锁失败 '+e); } }
+    L('页面加载完毕。默认“上锁播放”。WebShellActivity 侧已拦截一切导航（shouldOverrideUrlLoading 返回 true）。');
   </script>
 </body>
 </html>
