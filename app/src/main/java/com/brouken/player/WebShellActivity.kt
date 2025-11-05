@@ -1,152 +1,130 @@
-package com.brouken.player
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-import android.annotation.SuppressLint
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.view.Gravity
-import android.view.ViewGroup
-import android.webkit.*
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.TextView
-import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
 
-class WebShellActivity : AppCompatActivity() {
+    <uses-permission
+        android:name="android.permission.WRITE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
-    private var webView: WebView? = null
-    @Volatile private var playEnabled: Boolean = false
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT" />
+            <data android:mimeType="*/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT_TREE" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.PICTURE_IN_PICTURE_SETTINGS" />
+        </intent>
+    </queries>
 
-    private fun isPlayableUrl(u: String?): Boolean {
-        if (u.isNullOrBlank()) return false
-        val s = u.trim().lowercase()
-        return s.startsWith("http://") || s.startsWith("https://") ||
-               s.startsWith("rtsp://") || s.startsWith("rtmp://") ||
-               s.startsWith("file://") || s.startsWith("content://")
-    }
+    <application
+        android:allowBackup="false"
+        android:appCategory="video"
+        android:banner="@mipmap/banner"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:largeHeap="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:requestLegacyExternalStorage="true"
+        android:enableOnBackInvokedCallback="true"
+        android:localeConfig="@xml/locales_config"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Player"
+        tools:replace="android:allowBackup"
+        tools:targetApi="n">
 
-    private inner class JSBridge {
-        @JavascriptInterface fun enablePlay(enabled: Boolean) {
-            playEnabled = enabled
-            runOnUiThread {
-                Toast.makeText(this@WebShellActivity, if (enabled) "已解锁播放" else "已上锁播放", Toast.LENGTH_SHORT).show()
-            }
-        }
-        @JavascriptInterface fun isPlayEnabled(): Boolean = playEnabled
+        <!-- 保持播放器主入口不变 -->
+        <activity
+            android:name=".PlayerActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|touchscreen"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
+            tools:targetApi="n">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
 
-        @JavascriptInterface fun playUrl(url: String?) {
-            val u = url?.trim().orEmpty()
-            if (!playEnabled) {
-                runOnUiThread {
-                    Toast.makeText(this@WebShellActivity, "已拦截播放（未解锁）", Toast.LENGTH_LONG).show()
-                }
-                return
-            }
-            if (!isPlayableUrl(u)) {
-                runOnUiThread {
-                    Toast.makeText(this@WebShellActivity, "已拦截播放：无效链接或不支持的协议", Toast.LENGTH_LONG).show()
-                }
-                return
-            }
-            try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
-            } catch (_: Throwable) {
-                runOnUiThread { Toast.makeText(this@WebShellActivity, "无法打开此链接", Toast.LENGTH_LONG).show() }
-            }
-        }
-    }
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
 
-    @SuppressLint("SetJavaScriptEnabled")
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="rtsp" />
+            </intent-filter>
 
-        if (Build.VERSION.SDK_INT >= 24) {
-            val pkg = try { WebView.getCurrentWebViewPackage() } catch (_: Throwable) { null }
-            if (pkg == null) {
-                showNoWebViewScreen("此设备未安装或禁用了 Android System WebView，无法显示内置网页。")
-                return
-            }
-        }
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="application/x-subrip" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/x-ssa" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/ass" />
+                <data android:mimeType="application/ssa" />
+                <data android:mimeType="text/vtt" />
+                <data android:mimeType="application/vtt" />
+                <data android:mimeType="application/ttml+xml" />
+            </intent-filter>
 
-        val wv = try { WebView(this) } catch (t: Throwable) {
-            showNoWebViewScreen("WebView 初始化失败：${t.javaClass.simpleName}")
-            return
-        }
-        webView = wv
-        setContentView(wv)
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
 
-        WebView.setWebContentsDebuggingEnabled(true)
-        wv.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            allowFileAccess = true
-            allowContentAccess = true
-            mediaPlaybackRequiresUserGesture = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-            setSupportMultipleWindows(false) // 禁止多窗口
-        }
+        <!-- WebShell：加固版（禁用硬件加速、独立进程与任务、拦截导航） -->
+        <activity
+            android:name=".WebShellActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=":webshell"
+            android:process=":webview_sandbox"
+            android:excludeFromRecents="true"
+            android:hardwareAccelerated="false"
+            android:configChanges="orientation|keyboard|keyboardHidden|navigation|screenSize|screenLayout|smallestScreenSize|uiMode|touchscreen"
+            android:theme="@style/Theme.Player"
+            tools:targetApi="n" />
 
-        // 强拦截：页面内任何导航都不离开本地 index.html
-        wv.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                return true // 全部拦截
-            }
-            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                return true // 旧 API 也拦截
-            }
-        }
-        // 禁止新窗口
-        wv.webChromeClient = object : WebChromeClient() {
-            override fun onCreateWindow(view: WebView?, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message?): Boolean {
-                return false
-            }
-        }
+        <activity
+            android:name=".MediaStoreChooserActivity"
+            android:configChanges="orientation"
+            android:theme="@style/Transparent" />
 
-        // 注入 JS 桥（默认“上锁播放”）
-        wv.addJavascriptInterface(JSBridge(), "Android")
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true"
+            android:label="@string/pref_title"
+            android:parentActivityName=".PlayerActivity"
+            android:screenOrientation="locked"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" >
+            <intent-filter>
+                <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
-        wv.loadUrl("file:///android_asset/index.html")
-    }
-
-    private fun showNoWebViewScreen(message: String) {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(32, 48, 32, 48)
-            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        }
-        val tv = TextView(this).apply { text = message; textSize = 16f }
-        val btnInstall = Button(this).apply {
-            text = "安装/启用 Android System WebView"
-            setOnClickListener {
-                val pkg = "com.google.android.webview"
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")))
-                } catch (_: ActivityNotFoundException) {
-                    try {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$pkg")))
-                    } catch (_: Exception) {
-                        Toast.makeText(this@WebShellActivity, "无法打开应用市场或浏览器", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-        }
-        val btnClose = Button(this).apply { text = "关闭"; setOnClickListener { finish() } }
-        root.addView(tv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 24 })
-        root.addView(btnInstall, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 16 })
-        root.addView(btnClose, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        setContentView(root)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        webView?.let { w ->
-            (w.parent as? ViewGroup)?.removeView(w)
-            w.destroy()
-        }
-        webView = null
-    }
-}
+    </application>
+</manifest>
