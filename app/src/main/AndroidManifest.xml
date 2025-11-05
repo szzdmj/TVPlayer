@@ -1,130 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Debug 专用清单：把 SafeStubActivity 设为 LAUNCHER，并移除 PlayerActivity 上的 LAUNCHER 入口 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-feature
-        android:name="android.software.leanback"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.touchscreen"
-        android:required="false" />
-
-    <uses-permission
-        android:name="android.permission.WRITE_SETTINGS"
-        tools:ignore="ProtectedPermissions" />
-    <uses-permission android:name="android.permission.INTERNET" />
-
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.OPEN_DOCUMENT" />
-            <data android:mimeType="*/*" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.OPEN_DOCUMENT_TREE" />
-        </intent>
-        <intent>
-            <action android:name="android.settings.PICTURE_IN_PICTURE_SETTINGS" />
-        </intent>
-    </queries>
-
-    <application
-        android:allowBackup="false"
-        android:appCategory="video"
-        android:banner="@mipmap/banner"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:largeHeap="true"
-        android:networkSecurityConfig="@xml/network_security_config"
-        android:requestLegacyExternalStorage="true"
-        android:enableOnBackInvokedCallback="true"
-        android:localeConfig="@xml/locales_config"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.Player"
-        tools:replace="android:allowBackup"
-        tools:targetApi="n">
-
-        <!-- 保持播放器主入口不变 -->
+    <application>
+        <!-- 移除 PlayerActivity 的 MAIN/LAUNCHER（仅 Debug 合并生效），避免点击图标时进入播放器 -->
         <activity
             android:name=".PlayerActivity"
-            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|touchscreen"
+            tools:node="merge">
+            <intent-filter tools:node="remove">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Debug 下的“安全占位”启动页：纯原生，不含 WebView，不做任何外跳 -->
+        <activity
+            android:name=".SafeStubActivity"
             android:exported="true"
-            android:launchMode="singleTask"
-            android:supportsPictureInPicture="true"
-            tools:targetApi="n">
+            android:launchMode="singleInstance"
+            android:taskAffinity=":safestub"
+            android:theme="@style/Theme.Player"
+            tools:node="replace">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="rtsp" />
-            </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-                <data android:scheme="file" />
-                <data android:scheme="content" />
-                <data android:mimeType="video/*" />
-                <data android:mimeType="application/x-subrip" />
-                <data android:mimeType="text/plain" />
-                <data android:mimeType="text/x-ssa" />
-                <data android:mimeType="application/octet-stream" />
-                <data android:mimeType="application/ass" />
-                <data android:mimeType="application/ssa" />
-                <data android:mimeType="text/vtt" />
-                <data android:mimeType="application/vtt" />
-                <data android:mimeType="application/ttml+xml" />
-            </intent-filter>
-
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity>
-
-        <!-- WebShell：加固版（禁用硬件加速、独立进程与任务、拦截导航） -->
-        <activity
-            android:name=".WebShellActivity"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:taskAffinity=":webshell"
-            android:process=":webview_sandbox"
-            android:excludeFromRecents="true"
-            android:hardwareAccelerated="false"
-            android:configChanges="orientation|keyboard|keyboardHidden|navigation|screenSize|screenLayout|smallestScreenSize|uiMode|touchscreen"
-            android:theme="@style/Theme.Player"
-            tools:targetApi="n" />
-
-        <activity
-            android:name=".MediaStoreChooserActivity"
-            android:configChanges="orientation"
-            android:theme="@style/Transparent" />
-
-        <activity
-            android:name=".SettingsActivity"
-            android:exported="true"
-            android:label="@string/pref_title"
-            android:parentActivityName=".PlayerActivity"
-            android:screenOrientation="locked"
-            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" >
-            <intent-filter>
-                <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
-
     </application>
 </manifest>
