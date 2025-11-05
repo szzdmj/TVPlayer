@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug 专用清单：把 SafeStubActivity 设为 LAUNCHER，并移除 PlayerActivity 上的 LAUNCHER 入口 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <!-- 移除 PlayerActivity 的 MAIN/LAUNCHER（仅 Debug 合并生效），避免点击图标时进入播放器 -->
+        <activity
+            android:name=".PlayerActivity"
+            tools:node="merge">
+            <intent-filter tools:node="remove">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Debug 下的“安全占位”启动页：纯原生，不含 WebView，不做任何外跳 -->
+        <activity
+            android:name=".SafeStubActivity"
+            android:exported="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity=":safestub"
+            android:theme="@style/Theme.Player"
+            tools:node="replace">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
