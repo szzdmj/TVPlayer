@@ -43,7 +43,7 @@
         tools:replace="android:allowBackup"
         tools:targetApi="n">
 
-        <!-- 正常播放器入口（保持不变） -->
+        <!-- 保持播放器主入口不变 -->
         <activity
             android:name=".PlayerActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|touchscreen"
@@ -70,7 +70,6 @@
                 <data android:scheme="rtsp" />
             </intent-filter>
 
-            <!-- 常见来源与媒体类型（精简，不影响播放能力） -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -80,7 +79,6 @@
                 <data android:scheme="file" />
                 <data android:scheme="content" />
                 <data android:mimeType="video/*" />
-                <!-- 字幕 -->
                 <data android:mimeType="application/x-subrip" />
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="text/x-ssa" />
@@ -97,28 +95,16 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
-        <!-- 新的“Web 信息面板”独立图标入口（纯原生，不跳转） -->
-        <activity
-            android:name=".WebInfoActivity"
-            android:exported="true"
-            android:label="WebShell"
-            android:launchMode="singleInstance"
-            android:taskAffinity=":webinfo"
-            android:theme="@style/Theme.Player">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <!-- WebView 壳：仅从信息面板显式进入；隔离到单独 task，避免任务切换引发恢复 -->
+        <!-- WebShell：加固版（禁用硬件加速、独立进程与任务、拦截导航） -->
         <activity
             android:name=".WebShellActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:taskAffinity=":webshell"
+            android:process=":webview_sandbox"
             android:excludeFromRecents="true"
+            android:hardwareAccelerated="false"
+            android:configChanges="orientation|keyboard|keyboardHidden|navigation|screenSize|screenLayout|smallestScreenSize|uiMode|touchscreen"
             android:theme="@style/Theme.Player"
             tools:targetApi="n" />
 
