@@ -102,7 +102,8 @@
             android:name=".WebInfoActivity"
             android:exported="true"
             android:label="WebShell"
-            android:launchMode="singleTask"
+            android:launchMode="singleInstance"
+            android:taskAffinity=":webinfo"
             android:theme="@style/Theme.Player">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -111,18 +112,15 @@
             </intent-filter>
         </activity>
 
-        <!-- WebView 壳：手动从信息面板进入 -->
+        <!-- WebView 壳：仅从信息面板显式进入；隔离到单独 task，避免任务切换引发恢复 -->
         <activity
             android:name=".WebShellActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:taskAffinity=":webshell"
+            android:excludeFromRecents="true"
             android:theme="@style/Theme.Player"
-            tools:targetApi="n">
-            <intent-filter>
-                <action android:name="com.brouken.player.WEB_SHELL" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
+            tools:targetApi="n" />
 
         <activity
             android:name=".MediaStoreChooserActivity"
