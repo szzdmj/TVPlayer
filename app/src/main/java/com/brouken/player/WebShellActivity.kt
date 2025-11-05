@@ -21,16 +21,71 @@ import androidx.appcompat.app.AppCompatActivity
 class WebShellActivity : AppCompatActivity() {
 
     private var webView: WebView? = null
+    // 播放保护：默认关闭播放（防止页面自动触发）
+    @Volatile private var playEnabled: Boolean = false
 
-    private class JSBridge(private val activity: AppCompatActivity) {
+    private fun isPlayableUrl(u: String?): Boolean {
+        if (u.isNullOrBlank()) return false
+        val s = u.trim().lowercase()
+        return s.startsWith("http://") ||
+               s.startsWith("https://") ||
+               s.startsWith("rtsp://") ||
+               s.startsWith("rtmp://") ||
+               s.startsWith("file://") ||
+               s.startsWith("content://")
+    }
+
+    private inner class JSBridge {
+        @JavascriptInterface
+        fun enablePlay(enabled: Boolean) {
+            playEnabled = enabled
+            runOnUiThread {
+                Toast.makeText(
+                    this@WebShellActivity,
+                    if (enabled) "已解锁播放" else "已上锁播放",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
+        @JavascriptInterface
+        fun isPlayEnabled(): Boolean = playEnabled
+
         @JavascriptInterface
         fun playUrl(url: String?) {
             val u = url?.trim().orEmpty()
-            if (u.isEmpty()) return
+            if (!playEnabled) {
+                runOnUiThread {
+                    Toast.makeText(
+                        this@WebShellActivity,
+                        "已拦截播放（未解锁）。请先在页面点“解锁播放”再尝试。",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return
+            }
+            if (!isPlayableUrl(u)) {
+                runOnUiThread {
+                    Toast.makeText(
+                        this@WebShellActivity,
+                        "已拦截播放：无效链接或不支持的协议",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return
+            }
             try {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(u))
-                activity.startActivity(intent)
-            } catch (_: Throwable) { }
+                startActivity(intent)
+            } catch (_: Throwable) {
+                runOnUiThread {
+                    Toast.makeText(
+                        this@WebShellActivity,
+                        "无法打开此链接",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
         }
     }
 
@@ -66,7 +121,8 @@ class WebShellActivity : AppCompatActivity() {
         s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
 
         wv.webChromeClient = WebChromeClient()
-        wv.addJavascriptInterface(JSBridge(this), "Android")
+        // 注入 Android 接口（带播放保护）
+        wv.addJavascriptInterface(JSBridge(), "Android")
 
         // 3) 加载本地 assets/index.html
         wv.loadUrl("file:///android_asset/index.html")
@@ -90,7 +146,6 @@ class WebShellActivity : AppCompatActivity() {
         val btnInstall = Button(this).apply {
             text = "安装/启用 Android System WebView"
             setOnClickListener {
-                // 优先尝试市场协议，失败则跳网页
                 val pkg = "com.google.android.webview"
                 try {
                     startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")))
